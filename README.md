@@ -119,6 +119,39 @@ python3 -m scripts.package_skill /path/to/my-skill
 python3 -m scripts.aggregate_benchmark /path/to/workspace/iteration-1 --skill-name my-skill
 ```
 
+## 安装与依赖
+
+当前仓库还没有统一的 `requirements.txt` 或 `pyproject.toml`，所以先按能力分层理解依赖：
+
+### 核心能力
+
+用于初始化、校验、链接、打包、benchmark 聚合：
+
+- Python `3.9+`
+- `PyYAML`
+
+可先安装最小依赖：
+
+```bash
+python3 -m pip install pyyaml
+```
+
+### 可选增强能力
+
+用于 trigger / description optimization：
+
+- `anthropic`
+- `claude` CLI
+- 可用的 Anthropic 认证环境
+
+可选安装：
+
+```bash
+python3 -m pip install anthropic
+```
+
+如果没有这组依赖，仍然可以使用本仓库的大部分通用能力。
+
 ## 触发描述优化
 
 如果你明确要做“trigger / description optimization”，再使用下面这组脚本：
@@ -166,4 +199,4 @@ python3 -m scripts.run_loop --help
 
 ## 版本
 
-当前版本说明见 [VERSION.md](/Users/jixiaokang/.agents/skills/skills-master/VERSION.md)。
+当前版本说明见 [VERSION.md](VERSION.md)。
