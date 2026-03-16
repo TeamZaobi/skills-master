@@ -1,201 +1,157 @@
 # Skills Master
 
-`skills-master` 是一个面向多 Agent / 多工具环境的 skills 工程工具包。
+`skills-master` 不是面向某个业务领域的 skill，也不是一个泛化的 agent 工具箱。
 
-它现在的主定位不是“某个平台遗留的 skill 样板”，而是一个完整的 skills 维护仓库，用来处理这些事情：
+它的真正开发目的很简单：**把“开发 skill 这件事”本身做成一个可复用的 skill**。也就是说，当 agent 需要创建、重写、收缩、评估或治理其他 skills 时，这个 skill 提供方法、结构和配套资源。
 
-1. 新建 skill
-2. 重写已经过拟合或膨胀的 skill
-3. 设计评测集、对比基线和人工复核流程
-4. 优化 skill 的触发描述与元数据
-5. 维护一套 skills 在不同工具目录下的真实源与链接关系
+## 这个仓库究竟是什么
 
-## 当前定位
+这个仓库是 `skills-master` 这个 meta-skill 的源码与配套资源。
 
-本仓库已经按下面的边界重新整理：
+它服务的不是终端业务任务，而是下面这些“skill 开发任务”：
 
-- 主叙事改为“通用 skills 工程”，不再把继承自 Claude 的历史措辞当成默认前提。
-- 通用方法与平台特定能力分开描述。
-- `README.md` 只负责仓库入口、边界和使用方式。
-- `SKILL.md` 只负责这个 skill 本身的工作流与执行原则。
-- 仍然保留必要的兼容信息，但不再让旧平台假设主导全文。
+1. 从零创建一个新 skill
+2. 重写已经过拟合、堆规则、越改越乱的 skill
+3. 清理失真的说明文档，让 README、`SKILL.md`、脚本能力重新一致
+4. 给 skill 建立评测、人工 review、对比基线和迭代闭环
+5. 优化 skill 的触发描述与结构组织
+6. 统一多个工具环境下的真实源、链接与分发方式
 
-## 能力分层
+如果一句话概括：**它是“用来开发和维护其他 skills 的 skill”。**
 
-### 通用且稳定
+## 它不是什么
 
-这些能力不依赖单一平台，属于本项目的主路径：
+为了避免继续写偏，这个仓库不应该被描述成：
 
-- 设计或重写 `SKILL.md`
-- 组织 `scripts/`、`references/`、`assets/`
-- 初始化 skill 目录
-- 基础结构校验
-- 评测结果归档与 benchmark 聚合
-- 多工具目录的软链接管理
-- `.skill` 打包
+- 一个通用的多 Agent 框架
+- 一个以脚本集合为核心的 automation 仓库
+- 一个主要目标是打包 `.skill` 文件的发布工具
+- 一个围绕某个平台历史遗留语义展开的兼容层
 
-### 平台相关
+脚本、viewer、reference 文档都只是配套资源。主语始终应该是这个 skill 本身，以及它如何帮助 agent 更好地开发别的 skills。
 
-这些能力目前仍绑定特定运行环境，文档里会明确标注：
+## 核心方法
 
-- `scripts/run_eval.py`
-- `scripts/run_loop.py`
-- `scripts/improve_description.py`
+`skills-master` 的核心方法不是“多写规则”，而是：
 
-上面这组脚本依赖 Anthropic SDK 与 `claude` CLI，用于描述触发优化和触发率评测。它们是可选增强能力，不是整个项目的默认前提。
+1. 先识别当前任务属于创建、重写、文档校正、评测、触发优化还是分发
+2. 先修正仓库真实情况，再修 skill 内容，再补评测与分发
+3. 避免补丁式叠说明，尽量整段重写失真的 section
+4. 只在真的重复、脆弱、需要确定性时才把能力下沉到 `scripts/`
+5. 把通用方法和平台专用机制分开写清楚
+6. 用尽可能少但足够的结构，让 skill 可长期维护，而不是只对几个样例有效
 
-## 仓库结构
+## 仓库里的东西各自负责什么
 
-```text
-skills-master/
-├── SKILL.md
-├── README.md
-├── VERSION.md
-├── LICENSE.txt
-├── agents/
-│   ├── analyzer.md
-│   ├── comparator.md
-│   └── grader.md
-├── assets/
-│   └── eval_review.html
-├── eval-viewer/
-│   ├── generate_review.py
-│   └── viewer.html
-├── references/
-│   ├── output-patterns.md
-│   ├── schemas.md
-│   └── workflows.md
-└── scripts/
-    ├── aggregate_benchmark.py
-    ├── generate_report.py
-    ├── improve_description.py
-    ├── init_skill.py
-    ├── link_skill.py
-    ├── package_skill.py
-    ├── quick_validate.py
-    ├── run_eval.py
-    ├── run_loop.py
-    └── utils.py
-```
+### `SKILL.md`
 
-## 文档分工
+这是核心。它定义了 agent 在处理“skill 开发任务”时应该如何思考、分流、重写、评测和迭代。
 
-- `README.md`: 仓库入口、能力边界、快速上手、依赖说明
-- `SKILL.md`: 这个 skill 的执行说明，面向真正调用 skill 的 agent
-- `VERSION.md`: 当前版本定位与变更方向
-- `references/`: 写 skill 时按需读取的结构化参考
-- `agents/`: 评测、对比、分析等辅助角色说明
+### `scripts/`
 
-## 快速使用
+这些脚本不是仓库的目的，而是为 meta-skill 提供支撑：
 
-### 1. 初始化一个新 skill
+- 初始化 skill
+- 校验 skill 结构
+- 管理链接
+- 打包 skill
+- 聚合 benchmark
+- 在特定平台里做触发描述评测
+
+### `references/`
+
+提供可按需读取的技能设计参考，例如工作流模式、输出模式、JSON 结构约定。
+
+### `agents/`
+
+提供评分、对比、分析这类辅助角色说明，用于评测和迭代阶段。
+
+### `eval-viewer/`
+
+提供人工 review 界面生成能力，帮助人类快速查看不同迭代的输出与 benchmark。
+
+## 这个 skill 的主路径
+
+如果按真正用途来理解，本项目的默认使用路径应该是：
+
+1. 识别一个已有或待创建的 skill 是否需要被重做
+2. 阅读或改写它的 `SKILL.md`
+3. 决定哪些内容该留在主文档，哪些该下沉到 `scripts/`、`references/`、`assets/`
+4. 必要时补评测集和人工 review 流程
+5. 在确认结构稳定后，再考虑触发优化、链接和打包
+
+也就是说，**先有 skill 设计与治理，后有脚本与发布动作**。不要把顺序倒过来。
+
+## 给人的入口
+
+如果你是人类维护者，先看这几个文件：
+
+1. [SKILL.md](SKILL.md)
+2. [references/workflows.md](references/workflows.md)
+3. [references/output-patterns.md](references/output-patterns.md)
+4. [references/schemas.md](references/schemas.md)
+
+其中：
+
+- `README.md` 解释这个仓库为什么存在
+- `SKILL.md` 才是 agent 真正执行时要遵循的说明
+
+## 配套脚本
+
+只有在需要时再使用这些脚本，不要把它们当成项目目的：
 
 ```bash
 python3 scripts/init_skill.py my-skill --path ~/.agents/skills
-```
-
-### 2. 校验 skill 结构
-
-```bash
 python3 -m scripts.quick_validate /path/to/my-skill
-```
-
-### 3. 检查或创建链接
-
-```bash
 python3 scripts/link_skill.py /path/to/my-skill --status
-python3 scripts/link_skill.py /path/to/my-skill
-```
-
-### 4. 打包为 `.skill`
-
-```bash
 python3 -m scripts.package_skill /path/to/my-skill
-```
-
-### 5. 聚合 benchmark
-
-```bash
 python3 -m scripts.aggregate_benchmark /path/to/workspace/iteration-1 --skill-name my-skill
 ```
 
-## 安装与依赖
+## 依赖边界
 
-当前仓库还没有统一的 `requirements.txt` 或 `pyproject.toml`，所以先按能力分层理解依赖：
+### 通用能力
 
-### 核心能力
+下面这些能力是本仓库的常规部分：
 
-用于初始化、校验、链接、打包、benchmark 聚合：
+- skill 结构设计
+- 文档重写
+- 初始化、校验、链接、打包、benchmark 聚合
+
+最小依赖：
 
 - Python `3.9+`
 - `PyYAML`
-
-可先安装最小依赖：
 
 ```bash
 python3 -m pip install pyyaml
 ```
 
-### 可选增强能力
+### 平台专用增强能力
 
-用于 trigger / description optimization：
+触发描述优化相关脚本目前仍然依赖 Anthropic / Claude 生态：
 
 - `anthropic`
 - `claude` CLI
-- 可用的 Anthropic 认证环境
-
-可选安装：
+- 对应认证环境
 
 ```bash
 python3 -m pip install anthropic
-```
-
-如果没有这组依赖，仍然可以使用本仓库的大部分通用能力。
-
-## 触发描述优化
-
-如果你明确要做“trigger / description optimization”，再使用下面这组脚本：
-
-```bash
 python3 -m scripts.run_eval --help
 python3 -m scripts.run_loop --help
 ```
 
-使用前请确认：
+如果这部分环境不存在，不影响本仓库作为 meta-skill 的主要用途。
 
-1. 已安装 `anthropic`
-2. 当前环境可用 `claude` CLI
-3. 你接受这部分流程是 Anthropic / Claude 专用能力，而不是工具无关能力
+## 当前状态
 
-## 真实源与链接策略
+这个仓库现在已经完成一轮从“继承型文档”到“按真实目的重述”的整理，但仍有一些明确边界：
 
-推荐把 skill 的唯一可编辑真源放在下面两个位置之一：
+- 还没有统一的 `requirements.txt` 或 `pyproject.toml`
+- 部分脚本更适合以 `python3 -m scripts.<name>` 方式运行
+- 触发优化链路仍然不是跨平台实现
 
-- 用户级：`~/.agents/skills/<skill-name>`
-- 项目级：`<project-root>/.agents/skills/<skill-name>`
-
-然后通过 `link_skill.py` 映射到工具侧目录，而不是在每个工具目录里维护一份独立副本。
-
-当前脚本支持的目标包括：
-
-- Claude Code: `.claude/skills` 或 `~/.claude/skills`
-- Codex: `.codex/skills` 或 `~/.codex/skills`
-- Antigravity: `~/.gemini/antigravity/skills`，项目级默认直接使用 `.agents/skills`
-
-## 当前已知边界
-
-- 仓库里还没有统一的 `requirements.txt` / `pyproject.toml`。
-- 部分脚本需要以 `python3 -m scripts.<name>` 方式调用更稳妥，尤其是存在包内导入时。
-- 触发评测链路当前仍然围绕 Claude 生态实现，不应被误读为“所有 Agent 都有同等能力”。
-
-## 适合谁用
-
-适合这几类任务：
-
-1. 把零散经验沉淀成可复用 skill
-2. 收缩已经写得过长、过硬编码、过拟合的 skill
-3. 给 skill 建立更可复核的评测与人工 review 流程
-4. 统一一个项目里多个 skill 的命名、结构和链接规则
+这些都是配套层面的限制，不影响本项目作为“skill 开发 skill”的主定位。
 
 ## 版本
 
