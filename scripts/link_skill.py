@@ -27,15 +27,12 @@ from pathlib import Path
 
 # ─── Default link targets ───────────────────────────────────────────
 # Claude Code official docs define ~/.claude/skills and .claude/skills.
-# Antigravity official docs define ~/.gemini/antigravity/skills globally and
-# .agents/skills at the workspace level.
-# OpenAI official Codex docs confirm Skills support, but do not currently
-# publish a repository on-disk skill directory convention. This implementation
-# uses ~/.codex/skills and .codex/skills as the local compatibility path for
-# the Codex app/CLI environment on this machine.
+# OpenAI Codex official docs define ~/.agents/skills and .agents/skills.
+# Google Antigravity official docs define ~/.gemini/antigravity/skills globally
+# and <workspace-root>/.agents/skills at the workspace level.
 LINK_TARGETS = {
     "claude": ".claude/skills",
-    "codex":  ".codex/skills",
+    "codex":  ".agents/skills",
     "antigravity": ".gemini/antigravity/skills",
 }
 
@@ -80,6 +77,18 @@ def default_targets(project_root=None):
     return PROJECT_DEFAULT_TARGETS if project_root is not None else USER_DEFAULT_TARGETS
 
 
+def is_native_skill_path(skill_path, tool_name, project_root=None):
+    """Return True when the skill already lives in a tool's native path."""
+    target_dir = (
+        get_project_target_dir(tool_name, project_root)
+        if project_root is not None
+        else get_target_dir(tool_name)
+    )
+    if target_dir is None:
+        return False
+    return skill_path.parent == target_dir.resolve()
+
+
 def is_project_native_antigravity_skill(skill_path, project_root):
     """Return True when the skill already lives in Antigravity's native project path."""
     if project_root is None:
@@ -115,6 +124,16 @@ def link_skill(skill_path, targets=None, force=False, project_root=None):
     created, skipped, warnings = 0, 0, 0
 
     for tool in targets:
+        if is_native_skill_path(skill_path, tool, project_root):
+            target_dir = (
+                get_project_target_dir(tool, project_root)
+                if project_root is not None
+                else get_target_dir(tool)
+            )
+            print(f"  ✓  {tool}: native path {target_dir} (no link needed)")
+            skipped += 1
+            continue
+
         if tool == "antigravity" and project_root is not None:
             native_dir = get_project_target_dir(tool, project_root)
             if is_project_native_antigravity_skill(skill_path, project_root):
@@ -184,6 +203,11 @@ def unlink_skill(skill_path, targets=None, project_root=None):
     removed, not_found = 0, 0
 
     for tool in targets:
+        if is_native_skill_path(skill_path, tool, project_root):
+            print(f"  -  {tool}: native path (no link to remove)")
+            not_found += 1
+            continue
+
         if tool == "antigravity" and project_root is not None:
             print(f"  -  {tool}: project scope uses native .agents/skills path")
             not_found += 1
@@ -228,6 +252,15 @@ def status_skill(skill_path, targets=None, project_root=None):
     print(f"   Scope: {scope_label}\n")
 
     for tool in targets:
+        if is_native_skill_path(skill_path, tool, project_root):
+            native_dir = (
+                get_project_target_dir(tool, project_root)
+                if project_root is not None
+                else get_target_dir(tool)
+            )
+            print(f"  ✅ {tool:12s} native path ({native_dir})")
+            continue
+
         if tool == "antigravity" and project_root is not None:
             native_dir = get_project_target_dir(tool, project_root)
             if is_project_native_antigravity_skill(skill_path, project_root):
@@ -293,7 +326,7 @@ Examples:
     )
     parser.add_argument(
         "--project-root",
-        help="Project root for project-scoped links (uses <project-root>/.agents/skills as the real source, plus project .claude/.codex mappings)",
+        help="Project root for project-scoped links (uses <project-root>/.agents/skills as the real source, plus project .claude and shared .agents mappings)",
     )
     parser.add_argument("--status", action="store_true", help="Show link status only")
     parser.add_argument("--unlink", action="store_true", help="Remove links")

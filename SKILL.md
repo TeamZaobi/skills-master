@@ -1,11 +1,11 @@
 ---
 name: skills-master
-description: Create, refactor, evaluate, and maintain skills or whole skill toolkits. Use whenever the user wants to design a new skill, rewrite an overfit skill, clean up outdated skill docs, set up evals, compare versions, improve trigger descriptions, or rationalize how skills are organized across tools.
+description: Create, refactor, evaluate, and maintain skills, companion agents, or whole toolkits. Use whenever the user wants to design a new skill or agent, rewrite an overfit prompt asset, clean up outdated docs, set up evals, compare versions, improve trigger descriptions, or rationalize how skills and agents are organized across tools.
 ---
 
 # Skills Master
 
-Use this skill to move a skill project forward end to end. Do not treat it as a prompt-writing exercise only. Inspect the current repository, identify the user's stage, and choose the lightest workflow that will produce a defensible result.
+Use this skill to move a skill or companion agent project forward end to end. Do not treat it as a prompt-writing exercise only. Inspect the current repository, identify the user's stage, and choose the lightest workflow that will produce a defensible result.
 
 ## Working Style
 
@@ -19,27 +19,27 @@ Use this skill to move a skill project forward end to end. Do not treat it as a 
 
 Classify the request into one primary mode before editing:
 
-1. **Create**: there is no usable skill yet.
-2. **Refactor**: the skill exists but the structure, guidance, or scope is weak.
+1. **Create**: there is no usable skill or agent yet.
+2. **Refactor**: the asset exists but the structure, guidance, or scope is weak.
 3. **Document cleanup**: the repository drifted and the docs no longer match the real workflow.
 4. **Evaluate**: the user wants test prompts, benchmarks, or side-by-side comparison.
-5. **Optimize triggering**: the user wants better frontmatter descriptions and measurable trigger behavior.
-6. **Package or distribute**: the skill is done and needs linking or packaging.
+5. **Optimize triggering**: the user wants better frontmatter descriptions and measurable trigger behavior for a skill.
+6. **Package or distribute**: the asset is done and needs linking, projection, or packaging.
 
 If several modes apply, handle them in this order:
 
 1. Fix repository truth
-2. Fix skill content
+2. Fix skill or agent content
 3. Add or repair evaluation
-4. Optimize triggering
+4. Optimize triggering when the asset is a skill
 5. Package or link
 
 ## Capture Intent
 
-When creating or reshaping a skill, determine:
+When creating or reshaping a skill or agent, determine:
 
-1. What job the skill should make easier
-2. When it should trigger
+1. What job the asset should make easier
+2. When it should trigger or be selected
 3. What success looks like
 4. What output format or artifacts matter
 5. Whether the task benefits from formal evaluation or only qualitative review
@@ -52,6 +52,12 @@ Pull answers from the conversation and repository first. Ask follow-up questions
 
 Every skill must have:
 
+- `name`
+- `description`
+
+Every portable agent should have:
+
+- `AGENT.md`
 - `name`
 - `description`
 
@@ -72,9 +78,10 @@ Mix patterns only when it clearly improves usability.
 
 ### Progressive Disclosure
 
-Use the skill folder deliberately:
+Use the source folder deliberately:
 
 - `SKILL.md` for the main operating instructions
+- `AGENT.md` for the main agent operating instructions
 - `scripts/` for deterministic or repetitive execution
 - `references/` for supporting material that should be loaded only when needed
 - `assets/` for templates, boilerplates, and output-side files
@@ -231,6 +238,8 @@ Use one editable source of truth:
 
 - user scope: `~/.agents/skills/<skill-name>`
 - project scope: `<project-root>/.agents/skills/<skill-name>`
+- user agent scope: `~/.agents/agents/<agent-name>`
+- project agent scope: `<project-root>/.agents/agents/<agent-name>`
 
 Link outward to tool-specific discovery folders instead of maintaining multiple editable copies.
 
@@ -238,6 +247,7 @@ Link outward to tool-specific discovery folders instead of maintaining multiple 
 
 ```bash
 python scripts/init_skill.py my-skill --path ~/.agents/skills
+python scripts/init_agent.py review-agent --path ~/.agents/agents
 ```
 
 ### Link
@@ -245,12 +255,14 @@ python scripts/init_skill.py my-skill --path ~/.agents/skills
 ```bash
 python scripts/link_skill.py <skill-path>
 python scripts/link_skill.py <skill-path> --status
+python scripts/link_agent.py <agent-path>
+python scripts/link_agent.py <agent-path> --status
 ```
 
 ### Validate
 
 ```bash
-python -m scripts.quick_validate <skill-path>
+python -m scripts.quick_validate <skill-or-agent-path>
 ```
 
 ### Package
@@ -259,7 +271,19 @@ python -m scripts.quick_validate <skill-path>
 python -m scripts.package_skill <skill-path>
 ```
 
-Package only after the skill content and metadata are stable enough to share.
+Package only after the skill content and metadata are stable enough to share. For agents, prefer rendering or linking to official tool directories instead of inventing a private package format.
+
+### Official Tool Paths
+
+When linking or projecting outward, prefer official default locations:
+
+- Claude Code skills: `~/.claude/skills` and `.claude/skills`
+- Claude Code agents: `~/.claude/agents` and `.claude/agents`
+- OpenAI Codex skills: `~/.agents/skills` and `.agents/skills`
+- OpenAI Codex agents: `~/.codex/agents` and `.codex/agents`
+- Google Antigravity skills: `~/.gemini/antigravity/skills` and `<workspace-root>/.agents/skills`
+
+If a tool is file-based rather than directory-based, render the smallest projection you can instead of hand-maintaining a second editable copy.
 
 ## Environment Adaptation
 
@@ -268,6 +292,7 @@ Do not assume every environment has the same features.
 - If there are no subagents or parallel workers, run evals serially and lean more on human review.
 - If there is no browser, export static HTML or present results inline.
 - If there is no Anthropic stack, skip trigger optimization.
+- If a tool cannot consume the canonical asset shape directly, generate a thin adapter rather than forking the source text.
 - If the user only asked for documentation cleanup, do not drag them through benchmarking machinery they did not ask for.
 
 ## Reference Files
@@ -287,5 +312,5 @@ Before you finish, confirm that:
 
 1. The repository's main docs agree with the real workflow.
 2. Platform-specific instructions are clearly labeled.
-3. The skill did not become longer just to preserve outdated history.
+3. The guidance did not become longer just to preserve outdated history.
 4. The user can tell what is stable, what is optional, and what is environment-bound.
