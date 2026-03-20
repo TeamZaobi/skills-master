@@ -10,8 +10,10 @@ Use this skill to move a skill or companion agent project forward end to end. Do
 ## Working Style
 
 - Start from the actual repository state, not from inherited wording or remembered conventions.
+- Treat the current skill text as material to audit, not as a baseline that must be preserved.
 - Use accessible language unless the user clearly wants technical shorthand.
 - Prefer rewriting an outdated section cleanly over stacking more caveats onto it.
+- Do not mistake respect for additive-only editing. If a claim is wrong, stale, or overbroad, delete or rewrite it.
 - Separate portable guidance from platform-specific mechanics.
 - When the user only wants a focused cleanup, do that directly instead of forcing the full evaluation loop.
 
@@ -33,6 +35,26 @@ If several modes apply, handle them in this order:
 3. Add or repair evaluation
 4. Optimize triggering when the asset is a skill
 5. Package or link
+
+## Audit Existing Claims First
+
+When editing an existing skill, do not jump straight to wording tweaks.
+
+First inspect the current text as a set of claims:
+
+1. What does the skill say it does
+2. What files, scripts, references, or workflows actually support those claims
+3. Which claims are accurate
+4. Which claims are stale, inflated, contradictory, or too broad
+5. Which sections exist only because of previous patch-on-patch edits
+
+Then act in this order:
+
+1. Delete or rewrite unsupported claims
+2. Rebuild the section around the true scope
+3. Add constraints or trigger wording only if a local boundary still needs sharpening
+
+Do not turn this audit into another generated preamble. It is a judgment step before editing, not an extra layer of prompt decoration.
 
 ## Capture Intent
 
@@ -92,8 +114,10 @@ If a reference file becomes large, add navigation hints or a small table of cont
 
 - Explain why an instruction matters.
 - Avoid brittle rule piles unless the task truly has hard constraints.
+- Do not preserve inaccurate text by surrounding it with new caveats, exceptions, or negative trigger clauses.
 - Prefer generalizable guidance over examples that only fit one test case.
 - If the docs drifted because of multiple iterations, rewrite the affected section as a whole instead of appending more exceptions.
+- If a section only survives because "all changes must be additive", question that premise and re-check the repository truth.
 
 ## Evaluation Workflow
 
