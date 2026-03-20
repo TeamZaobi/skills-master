@@ -1,15 +1,28 @@
 ---
 name: skills-master
-description: Create, refactor, evaluate, and maintain skills, companion agents, or whole toolkits. Use whenever the user wants to design a new skill or agent, rewrite an overfit prompt asset, clean up outdated docs, set up evals, compare versions, improve trigger descriptions, or rationalize how skills and agents are organized across tools.
+description: Use for skill or agent lifecycle work, especially when the user wants to upgrade or update an existing skill, sync with upstream, merge local customizations, verify which copy/path is live, or then refactor, evaluate, package, or redistribute it. Trigger on requests like "upgrade skill", "update skill", "sync upstream", "which copy is live", "升级 skill", "更新 skill", and "同步上游".
 ---
 
 # Skills Master
 
 Use this skill to move a skill or companion agent project forward end to end. Do not treat it as a prompt-writing exercise only. Inspect the current repository, identify the user's stage, and choose the lightest workflow that will produce a defensible result.
 
+## Trigger Coverage
+
+Use this skill not only for authoring or rewriting, but also when the user wants to:
+
+- upgrade an existing skill or agent from GitHub or another source
+- compare an installed copy against upstream or against another local copy
+- find which path, copy, symlink, or projected bundle is actually live in a tool
+- relink, copy, package, or redistribute a skill or agent across tool directories
+- audit whether a previous upgrade or install was done correctly
+
 ## Working Style
 
 - Start from the actual repository state, not from inherited wording or remembered conventions.
+- Prefer one editable source of truth. If the runtime can consume that source directly or through a thin projection, do not maintain extra editable copies.
+- Treat local adaptations as real product decisions, not as disposable noise to be overwritten by upstream.
+- When modifying an existing third-party or previously installed asset, check whether upstream changed before you optimize the local copy.
 - Treat the current skill text as material to audit, not as a baseline that must be preserved.
 - Use accessible language unless the user clearly wants technical shorthand.
 - Prefer rewriting an outdated section cleanly over stacking more caveats onto it.
@@ -22,19 +35,21 @@ Use this skill to move a skill or companion agent project forward end to end. Do
 Classify the request into one primary mode before editing:
 
 1. **Create**: there is no usable skill or agent yet.
-2. **Refactor**: the asset exists but the structure, guidance, or scope is weak.
-3. **Document cleanup**: the repository drifted and the docs no longer match the real workflow.
-4. **Evaluate**: the user wants test prompts, benchmarks, or side-by-side comparison.
-5. **Optimize triggering**: the user wants better frontmatter descriptions and measurable trigger behavior for a skill.
-6. **Package or distribute**: the asset is done and needs linking, projection, or packaging.
+2. **Upgrade or sync**: the asset exists and the user wants it refreshed from upstream, aligned across installs, or checked for version drift.
+3. **Refactor**: the asset exists but the structure, guidance, or scope is weak.
+4. **Document cleanup**: the repository drifted and the docs no longer match the real workflow.
+5. **Evaluate**: the user wants test prompts, benchmarks, or side-by-side comparison.
+6. **Optimize triggering**: the user wants better frontmatter descriptions and measurable trigger behavior for a skill.
+7. **Install, link, package, or distribute**: the asset is done and needs linking, projection, packaging, or copy-based rollout.
 
 If several modes apply, handle them in this order:
 
-1. Fix repository truth
-2. Fix skill or agent content
-3. Add or repair evaluation
-4. Optimize triggering when the asset is a skill
-5. Package or link
+1. Identify the live asset and the editable source of truth
+2. Fix repository truth or sync upstream
+3. Fix skill or agent content
+4. Add or repair evaluation
+5. Optimize triggering when the asset is a skill
+6. Verify installation mode, then package, copy, or link
 
 ## Audit Existing Claims First
 
@@ -67,6 +82,83 @@ When creating or reshaping a skill or agent, determine:
 5. Whether the task benefits from formal evaluation or only qualitative review
 
 Pull answers from the conversation and repository first. Ask follow-up questions only when the missing detail changes the implementation meaningfully.
+
+## Upstream Preflight For Existing Assets
+
+When the user wants to modify, optimize, or rewrite an existing skill or agent that may have come from GitHub, a marketplace, or another local clone, treat upstream checking as a default pre-edit step.
+
+Do this before local optimization:
+
+1. Decide whether the asset has a canonical upstream source.
+   If the asset is purely local and intentionally private, you can skip this section.
+2. Inventory meaningful local divergence first.
+   Look for local trigger tuning, tool-specific adapters, personalized defaults, installation changes, or behavior changes the user relies on.
+3. Check whether upstream changed recently enough to affect the local plan.
+   Look for commits, tags, releases, layout changes, or installation guidance changes.
+4. Fetch or download the latest upstream state into a comparison context.
+   Prefer a separate branch, temporary clone, fetched ref, or unpacked snapshot over overwriting the local source in place.
+5. Compare three things separately when they differ:
+   the live asset, the editable source of truth, and the upstream source.
+6. Decide the branch of work explicitly:
+   merge upstream first, fork intentionally, or stay pinned to the current local version.
+7. Only then start local refactor, optimization, or trigger rewriting.
+
+Why this is a default strategy:
+
+- You do not want to optimize a stale copy when upstream already solved the problem.
+- You do not want to patch around a structure that changed upstream yesterday.
+- You do not want to compare your rewrite against the wrong baseline.
+- You do not want to erase local adaptations the user still depends on.
+
+Do not turn this into cargo-cult checking:
+
+- Skip it when the asset has no meaningful upstream.
+- Skip it when the user explicitly wants a local-only fork and accepts the divergence.
+- Keep the check lightweight when the user only needs a narrow local fix and upstream drift is unlikely to matter.
+
+## Upgrade Or Sync Workflow
+
+When the user asks to upgrade an existing skill or agent, do not treat it as a plain repository update.
+
+The first simplification question is:
+
+- Is there already a single editable source of truth that should be upgraded, while every other copy is just a live projection, symlink target, or packaged artifact?
+
+If yes, prefer upgrading only that source and then verifying or refreshing the projections. Do not turn a one-source upgrade into a multi-copy editing task.
+
+The second safety question is:
+
+- Does that source contain local adaptations or personalized behavior that upstream does not know about?
+
+If yes, do not overwrite it in place. Fetch the newest upstream copy separately, compare the deltas, and merge intentionally into the authoritative local source.
+
+Work in this order:
+
+1. Identify the live asset the tool is actually reading right now.
+   Check whether the active path is a copy, symlink, generated projection, or workspace-local bundle.
+2. Identify the editable source of truth that should be updated.
+   Do not assume the live asset is the editable source.
+3. Collapse avoidable complexity.
+   If one source can remain authoritative, upgrade that source only.
+   Treat other locations as projections to validate or regenerate, not as parallel places to hand-edit.
+4. Protect local divergence.
+   Inventory local adaptations before touching the source.
+   Fetch or download upstream into a separate comparison context.
+   Decide whether to merge, cherry-pick, port selected changes, or stay pinned.
+5. Decide the upgrade mode.
+   Development-maintenance mode can use symlinks or projections.
+   Stable distribution mode should prefer copied bundles or explicit packaging over fragile path dependencies.
+6. Update the single authoritative source using the chosen merge strategy.
+7. Refresh the live install, link, or projection if the source layout changed.
+8. Validate the result.
+   Confirm the active path, version markers, and whether the tool needs a new session to rediscover the updated asset.
+
+Two guardrails matter here:
+
+- A repository being current does not mean the live skill or agent is current.
+- If your upgrade plan requires hand-editing several copies, you probably modeled the source of truth incorrectly.
+- If your upgrade plan would discard local adaptations before they are inventoried and merged, it is unsafe.
+- Do not call the upgrade complete until the runtime consumer path has been checked.
 
 ## Authoring Rules
 
@@ -338,3 +430,4 @@ Before you finish, confirm that:
 2. Platform-specific instructions are clearly labeled.
 3. The guidance did not become longer just to preserve outdated history.
 4. The user can tell what is stable, what is optional, and what is environment-bound.
+5. For upgrade or install work, the live consumer path, install mode, and refresh requirements are explicit.
