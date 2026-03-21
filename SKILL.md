@@ -211,6 +211,59 @@ If a reference file becomes large, add navigation hints or a small table of cont
 - If the docs drifted because of multiple iterations, rewrite the affected section as a whole instead of appending more exceptions.
 - If a section only survives because "all changes must be additive", question that premise and re-check the repository truth.
 
+### Structured Authoring: Combine Containers And Block Tags
+
+Treat skill structure as a two-level system:
+
+1. **Containers** separate large content roles and loading boundaries.
+2. **Block tags** clarify the purpose of a section inside the chosen container.
+
+Use containers first:
+
+| Container | Put here | Why |
+|-----|---------|-------------|
+| `frontmatter` | Triggering metadata such as `name` and `description` | Loaded early for discovery and activation |
+| `SKILL.md` body | The main workflow, decision rules, and critical operating guidance | Core execution path for the skill |
+| `references/` | Detailed explanations, schemas, variants, and background material | Keeps the main skill lean |
+| `scripts/` | Deterministic or repetitive execution logic | Improves reliability and reduces prompt bloat |
+| `assets/` | Templates, boilerplates, and output-side resources | Keeps reusable artifacts out of instruction prose |
+| `evals/` or structured JSON files | Test prompts, assertions, and benchmark inputs | Makes evaluation explicit instead of implied |
+
+Then use block tags only when a container still needs finer semantic separation.
+
+Suggested block tag fields:
+
+| Field | Purpose |
+|-----|---------|
+| `kind` | What this block is doing: `workflow`, `decision`, `constraint`, `example`, `anti-pattern`, `rationale` |
+| `stage` | Where it applies: `trigger`, `preflight`, `execution`, `validation`, `handoff` |
+| `strictness` | How binding it is: `required`, `preferred`, `optional` |
+| `audience` | Who the block is for: `agent`, `author`, `reviewer` |
+| `load-when` | Optional hint for when to read the block or companion file |
+
+Example:
+
+~~~markdown
+## Upstream Check
+
+```skill-block
+kind: decision
+stage: preflight
+strictness: required
+audience: agent
+```
+
+If the asset has a meaningful upstream, check drift before local optimization.
+~~~
+
+Design rules:
+
+- Prefer container boundaries over sentence-level tagging.
+- Tag blocks sparingly; do not turn the whole skill into pseudo-XML or pseudo-JSON.
+- Do not assume a file-wide default such as "all untagged text is output-form." Most skill prose is execution guidance, not product copy.
+- If a section is mostly background or edge-case detail, move it into `references/` instead of wrapping it in local tags.
+- Treat block tags as an authoring convention unless the repository also ships a parser, linter, or projection step that enforces them.
+
 ## Evaluation Workflow
 
 Use the full loop only when it adds signal. For a small doc correction or a narrow rewrite, a lighter pass is usually better.
