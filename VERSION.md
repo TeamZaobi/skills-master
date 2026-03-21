@@ -3,9 +3,9 @@
 ## Current
 
 - Name: `skills-master`
-- Version: `0.3.0`
-- Status: skill / agent lifecycle maintenance with upstream-preflight and merge-first upgrade strategy
-- Date: `2026-03-20`
+- Version: `0.3.1`
+- Status: skill / agent lifecycle maintenance with structured authoring, upstream-preflight, and merge-first upgrade strategy
+- Date: `2026-03-21`
 
 ## This Version Includes
 
@@ -16,12 +16,16 @@
 5. 明确升级时应先获取最新 upstream 副本，再融合本地适应性和个性化修改
 6. 将 live asset、source of truth、projection / copy / symlink 的区别写成显式工作流
 7. 统一 README、`SKILL.md` 与版本说明对升级、融合、触发边界的描述
+8. 将内联 `meta` 注释式设计改写为“容器优先 + 块级标签补充”的结构化写法
+9. 明确 `frontmatter`、`SKILL.md`、`references/`、`scripts/`、`assets/`、`evals/` 的职责分工
+10. 去掉“未标注文本默认 target-form”这类文件级默认语义，改为显式、局部、可收敛的块级标签约定
 
 ## Compatibility Notes
 
 - skill / agent 设计、重写、校验、聚合、链接管理属于通用能力
 - agent 投影与最小适配层管理已纳入当前版本主叙述
 - upstream preflight、merge-first upgrade、single-source-of-truth 属于当前版本默认策略
+- structured authoring 默认采用容器分流，块级标签只作为补充语义
 - `run_eval.py`、`run_loop.py`、`improve_description.py` 仍属于 Anthropic / Claude 专用链路
 - 工具侧链接目标仍然保留 `claude`、`codex`、`antigravity`
 - 历史兼容信息保留，但不再作为默认工作流叙述
@@ -37,14 +41,14 @@
 
 ## Why This Bump
 
-这次需要升到 `0.3.0`，因为它不只是补几条说明，而是改了 `skills-master` 对“已有外部 skill / agent 如何升级与优化”的默认方法：
+这次需要升到 `0.3.1`，因为它在 `0.3.0` 的生命周期与升级策略之上，又补了一次明确的结构设计修正：
 
-1. 触发描述从“创建 / 重写 skill”扩展到“升级 / 同步 / 判断哪份在生效”
-2. 默认前置策略新增 upstream preflight，而不是直接在本地旧副本上开改
-3. 升级动作从“直接同步”升级为“先取最新副本，再融合本地适应性修改”
-4. 单一真实源、live asset、projection 的关系被提升为默认建模原则
+1. 不再把 `meta` 设计成文件内的默认语义系统，而是回到社区更稳定的容器化组织
+2. 在容器分流的基础上，允许用少量块级标签表达 `workflow`、`decision`、`constraint` 等局部语义
+3. 明确这类标签首先是作者约定，不假定仓库已经有解析器、linter 或 projection 去强制执行
+4. 让结构化设计更贴近 `skills-master` 当前仓库已经存在的 `references/`、`scripts/`、`assets/` 与 eval 工作流
 
-因此用 `0.3.0` 标记一次生命周期与升级策略层面的升级更合适。
+因此更合适的标记是一次补丁升级到 `0.3.1`，而不是继续沿用 `0.3.0` 的版本描述。
 
 ## Next Expected Version
 
