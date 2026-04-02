@@ -81,27 +81,59 @@ When creating or reshaping a skill or agent, determine:
 4. What output format or artifacts matter
 5. Whether the task benefits from formal evaluation or only qualitative review
 
+Also decide whether the planned edit is narrow or high-risk enough to justify the stronger pre-edit preflight below.
+
 Pull answers from the conversation and repository first. Ask follow-up questions only when the missing detail changes the implementation meaningfully.
 
-## Upstream Preflight For Existing Assets
+## Pre-edit Preflight For Existing Assets
 
-When the user wants to modify, optimize, or rewrite an existing skill or agent that may have come from GitHub, a marketplace, or another local clone, treat upstream checking as a default pre-edit step.
+When the user wants to modify, optimize, or rewrite an existing skill or agent, treat pre-edit preflight as the default decision gate before local optimization.
 
-Do this before local optimization:
+Run only the branches that add signal:
 
-1. Decide whether the asset has a canonical upstream source.
-   If the asset is purely local and intentionally private, you can skip this section.
-2. Inventory meaningful local divergence first.
+1. Decide whether the planned change is narrow or high-risk.
+   Narrow wording fixes, obvious local bug fixes, and other low-risk cleanup usually do not need the stronger convergence branch.
+2. Decide whether the asset has a canonical upstream source.
+   If the asset is purely local and intentionally private, you can skip the upstream branch.
+3. Run the relevant branch or branches below.
+4. Only then start local refactor, optimization, or trigger rewriting.
+
+### Upstream Branch
+
+If the asset may have come from GitHub, a marketplace, or another local clone, do this before local optimization:
+
+1. Inventory meaningful local divergence first.
    Look for local trigger tuning, tool-specific adapters, personalized defaults, installation changes, or behavior changes the user relies on.
-3. Check whether upstream changed recently enough to affect the local plan.
+2. Check whether upstream changed recently enough to affect the local plan.
    Look for commits, tags, releases, layout changes, or installation guidance changes.
-4. Fetch or download the latest upstream state into a comparison context.
+3. Fetch or download the latest upstream state into a comparison context.
    Prefer a separate branch, temporary clone, fetched ref, or unpacked snapshot over overwriting the local source in place.
-5. Compare three things separately when they differ:
+4. Compare three things separately when they differ:
    the live asset, the editable source of truth, and the upstream source.
-6. Decide the branch of work explicitly:
+5. Decide the branch of work explicitly:
    merge upstream first, fork intentionally, or stay pinned to the current local version.
-7. Only then start local refactor, optimization, or trigger rewriting.
+
+### High-Risk Modification Convergence Branch
+
+Use this stronger path when the change is likely to reshape the asset rather than just clean it up.
+
+Typical triggers:
+
+- the change affects the core job, trigger boundary, adjacent-skill ownership, or source-of-truth model
+- the request combines competing goals such as broader triggering and tighter boundaries
+- the asset has meaningful local divergence and the edit direction is not obvious
+- the work looks like a refactor or scope rewrite rather than a narrow fix
+
+Run one short pass:
+
+1. Freeze the user's original intent.
+   Capture the job to preserve, the non-goals, and what must not break.
+2. Audit claims and preflight context together.
+   Reuse the earlier claim audit and any upstream or source-of-truth findings instead of restating them as a new preamble.
+3. Run one round of adversarial questioning.
+   Challenge whether the current plan fixes the real problem or only adds more rules, exceptions, or ritual around symptoms.
+4. Write a convergence summary before editing.
+   State what to keep, delete, rewrite, or defer, and answer explicitly: has this plan drifted away from the user's original intent?
 
 Why this is a default strategy:
 
@@ -109,12 +141,14 @@ Why this is a default strategy:
 - You do not want to patch around a structure that changed upstream yesterday.
 - You do not want to compare your rewrite against the wrong baseline.
 - You do not want to erase local adaptations the user still depends on.
+- You do not want a high-risk rewrite to drift away from the user's actual problem while looking more sophisticated on paper.
 
-Do not turn this into cargo-cult checking:
+Do not turn this into cargo-cult process:
 
-- Skip it when the asset has no meaningful upstream.
-- Skip it when the user explicitly wants a local-only fork and accepts the divergence.
-- Keep the check lightweight when the user only needs a narrow local fix and upstream drift is unlikely to matter.
+- Skip the upstream branch when the asset has no meaningful upstream.
+- Skip the upstream branch when the user explicitly wants a local-only fork and accepts the divergence.
+- Skip the convergence branch for narrow local fixes, obvious doc corrections, and other low-risk cleanup.
+- Keep the whole preflight lightweight when the likely answer is already clear.
 
 ## Upgrade Or Sync Workflow
 
