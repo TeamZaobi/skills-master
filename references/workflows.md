@@ -26,3 +26,25 @@ For tasks with branching logic, guide the model through decision points:
 2. Creation workflow: [steps]
 3. Editing workflow: [steps]
 ```
+
+## A/B E2E Workflows
+
+For skill modifications, upgrades, capability additions, or boundary rewrites, a controlled A/B E2E workflow is often more reliable than a one-off trial.
+
+Example:
+
+```markdown
+To check whether the new skill draft is actually better:
+
+1. Freeze the prompt set and scoring rubric
+2. Define the two conditions:
+   `with_skill` vs `without_skill`, or `new_skill` vs `old_skill`
+3. Spawn a fresh isolated worker for every run
+4. Run every prompt under every condition three times
+5. Keep the model, files, response cap, and output contract identical
+6. Grade each run separately
+7. Aggregate per prompt and per condition
+8. Inspect deltas and regressions before editing again
+```
+
+If the environment does not support subagents, simulate isolation with fresh serial sessions. Do not reuse the same conversation state across conditions when the goal is to measure prompt value.

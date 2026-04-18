@@ -12,12 +12,13 @@
 
 1. 从零创建一个新 skill
 2. 升级一个已安装的 skill 或 agent，并确认当前真正生效的是哪份资产
-3. 重写已经过拟合、堆规则、越改越乱的 skill
-4. 清理失真的说明文档，让 README、`SKILL.md`、脚本能力重新一致
-5. 给 skill 建立评测、人工 review、对比基线和迭代闭环
-6. 优化 skill 的触发描述与结构组织
-7. 为 agents 建立单一真实源、跨工具投影与最小适配层
-8. 统一多个工具环境下的真实源、链接与分发方式
+3. 给现有 skill 增加新能力，但不让边界和主职责失控
+4. 重写已经过拟合、堆规则、越改越乱的 skill
+5. 清理失真的说明文档，让 README、`SKILL.md`、脚本能力重新一致
+6. 给 skill 建立评测、人工 review、对比基线和迭代闭环
+7. 优化 skill 的触发描述与结构组织
+8. 为 agents 建立单一真实源、跨工具投影与最小适配层
+9. 统一多个工具环境下的真实源、链接与分发方式
 
 如果一句话概括：**它是“用来开发和维护其他 skills 与 companion agents 的 skill”。**
 
@@ -49,7 +50,8 @@
 11. 不要把“尊重原文”误写成“所有修改都必须 additive”
 12. 只在真的重复、脆弱、需要确定性时才把能力下沉到 `scripts/`
 13. 把通用方法和平台专用机制分开写清楚
-14. 用尽可能少但足够的结构，让 skill 或 agent 可长期维护，而不是只对几个样例有效
+14. 对修改、升级、加能力和评测，优先用上下文隔离的 A/B E2E 对比，而不是靠一次主观试跑判断提示词值不值
+15. 用尽可能少但足够的结构，让 skill 或 agent 可长期维护，而不是只对几个样例有效
 
 ## 一个需要避免的反模式
 
@@ -87,10 +89,11 @@
 - 渲染 Codex agent 投影
 - 聚合 benchmark
 - 在特定平台里做触发描述评测
+- 做多-skill 边界的静态检查
 
 ### `references/`
 
-提供可按需读取的技能设计参考，例如工作流模式、输出模式、JSON 结构约定。
+提供可按需读取的技能设计参考，例如工作流模式、输出模式、JSON 结构约定，以及多-skill 的拆分与 handoff 策略。
 
 ### `agents/`
 
@@ -108,10 +111,28 @@
 2. 审计它当前文档中的 claim 哪些真实、哪些漂移、哪些过度表述
 3. 阅读或改写它的 `SKILL.md` 或 `AGENT.md`
 4. 决定哪些内容该留在主文档，哪些该下沉到 `scripts/`、`references/`、`assets/`
-5. 必要时补评测集和人工 review 流程
-6. 在确认结构稳定后，再考虑触发优化、链接、投影和打包
+5. 如果这次修改会影响边界、能力面或提示词价值，先配一组隔离上下文的对比测试
+6. 必要时补评测集和人工 review 流程
+7. 在确认结构稳定后，再考虑触发优化、链接、投影和打包
 
 也就是说，**先有 skill / agent 设计与治理，后有脚本与发布动作**。不要把顺序倒过来。
+
+## 多-Skill 协同怎么处理
+
+这里的默认策略不是“把每个子步骤都拆成 skill”，而是：
+
+1. 先找出主用户故事，由一个 primary skill 对最终结果负责
+2. 只有当另一个 skill 提供了独立能力，且 primary skill 不该吞掉它时，才让它作为 secondary skill 协同
+3. 如果多个 skills 共享同一个可复用子步骤，就把它下沉到 `scripts/` 或 `references/`，不要做成隐式 skill 依赖
+4. 如果几个 micro-skill 常在同类 query 上一起触发，还共享同一真实源，就应该合并成一个 domain skill，在内部 route
+5. orchestration skill 必须显式写出 `WHEN NOT TO USE`、handoff 边界、exit criteria 和 source-of-truth 归属
+
+仓库里的配套文件：
+
+- `references/multi-skill-strategy.md`：多-skill 的拆分、合并和协同策略
+- `references/adjacent-skills.md`：常见邻接 skill 家族的 handoff 边界
+- `evals/boundary-evals.json`：多-skill 边界样例
+- `scripts/check_multi_skill_boundaries.py`：静态边界检查器
 
 ## 一个经常被漏掉的触发场景
 
@@ -207,6 +228,8 @@
 2. [references/workflows.md](references/workflows.md)
 3. [references/output-patterns.md](references/output-patterns.md)
 4. [references/schemas.md](references/schemas.md)
+5. [references/multi-skill-strategy.md](references/multi-skill-strategy.md)
+6. [references/adjacent-skills.md](references/adjacent-skills.md)
 
 其中：
 
@@ -225,6 +248,7 @@ python3 scripts/link_skill.py /path/to/my-skill --status
 python3 scripts/link_agent.py /path/to/review-agent --status
 python3 -m scripts.package_skill /path/to/my-skill
 python3 -m scripts.aggregate_benchmark /path/to/workspace/iteration-1 --skill-name my-skill
+python3 -m scripts.check_multi_skill_boundaries ~/.agents/skills --boundary-evals /path/to/skill/evals/boundary-evals.json
 ```
 
 ## 依赖边界
@@ -265,6 +289,7 @@ python3 -m scripts.run_loop --help
 - 还没有统一的 `requirements.txt` 或 `pyproject.toml`
 - 部分脚本更适合以 `python3 -m scripts.<name>` 方式运行
 - 触发优化链路仍然不是跨平台实现
+- 多-skill 边界检查目前先是静态 checker，动态同场实测仍需后补
 
 这些都是配套层面的限制，不影响本项目作为“skill / agent 开发 skill”的主定位。
 

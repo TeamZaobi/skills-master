@@ -36,6 +36,115 @@ Defines the evals for a skill. Located at `evals/evals.json` within the skill di
 
 ---
 
+## eval_metadata.json
+
+Run metadata for a single eval directory or run directory. Recommended locations:
+`<eval-dir>/eval_metadata.json` or `<run-dir>/eval_metadata.json`.
+
+This file is useful when you are running controlled A/B E2E comparisons and need to keep
+prompt, condition, and repeat indexes stable across isolated runs.
+
+```json
+{
+  "eval_id": 2,
+  "prompt": "给这个 skill 加一个 architecture 模式，再比较有和没有提示词的质量差别。",
+  "expected_output": "A boundary-safe skill edit plus a controlled comparison plan",
+  "configuration": "with_skill",
+  "run_number": 1,
+  "prompt_id": "P2",
+  "comparison_group": "skills-master-e2e-2026-04-18",
+  "context_isolated": true,
+  "response_contract": {
+    "max_words": 120,
+    "format": "markdown",
+    "forbid_meta": true
+  }
+}
+```
+
+**Fields:**
+- `eval_id`: Numeric or string identifier for the eval case
+- `prompt`: The exact user prompt executed for this run
+- `expected_output`: Optional human-readable success description
+- `configuration`: Optional comparison label such as `"with_skill"`, `"without_skill"`, `"new_skill"`, or `"old_skill"`
+- `run_number`: Optional repeat index for repeated runs
+- `prompt_id`: Optional short label for the prompt within a larger comparison set
+- `comparison_group`: Optional stable identifier that ties repeated runs into one benchmark batch
+- `context_isolated`: Optional boolean marking whether the run used a fresh isolated worker or session
+- `response_contract`: Optional object describing caps or formatting constraints that were held constant across conditions
+
+**Guidance:**
+- At minimum, include `eval_id` and `prompt`
+- For built-in benchmark viewers and aggregators, prefer the exact strings `"with_skill"` and `"without_skill"` when that is the comparison you are running
+- Keep the same `prompt_id`, `comparison_group`, and `response_contract` across matched conditions so later aggregation is defensible
+- If you ran an uncontrolled pilot that you decided to discard, do not mix it into the same benchmark directory
+
+---
+
+## trigger-evals.json
+
+Defines the trigger-eval query set for frontmatter description optimization.
+Recommended location: `evals/trigger-evals.json` within the skill directory.
+
+```json
+[
+  {
+    "query": "Upgrade this installed skill and check which copy is live",
+    "should_trigger": true
+  },
+  {
+    "query": "Build a marketing landing page for this project",
+    "should_trigger": false
+  }
+]
+```
+
+**Fields:**
+- `query`: A realistic user request written in natural language
+- `should_trigger`: Whether the skill should be selected for that request
+
+**Guidance:**
+- Include both positive and negative cases
+- Make negative cases near misses when possible, not only obviously unrelated prompts
+- Prefer coverage of adjacent skills, install-path ambiguity, upstream sync, doc cleanup, and trigger-boundary cases
+
+---
+
+## boundary-evals.json
+
+Defines multi-skill boundary cases for environments where a skill may coexist
+with adjacent skills. Recommended location:
+`evals/boundary-evals.json` within the skill directory.
+
+```json
+[
+  {
+    "query": "Research community best practices, then rewrite this skill",
+    "expected_primary_skill": "skills-master",
+    "allowed_secondary_skills": ["deep-research"],
+    "forbidden_skills": ["web-research"],
+    "expected_route": "research_then_refactor",
+    "rationale": "The main job is still skill lifecycle work."
+  }
+]
+```
+
+**Fields:**
+- `query`: A realistic user request written in natural language
+- `expected_primary_skill`: The skill that should own the final result
+- `allowed_secondary_skills`: Optional list of skills that may participate without stealing ownership
+- `forbidden_skills`: Skills that should not be treated as correct owners for this case
+- `expected_route`: Short label for the intended execution split or handoff pattern
+- `rationale`: Why this boundary exists
+
+**Guidance:**
+- Use this file only when adjacent skills could plausibly compete for the same query
+- Keep the primary skill explicit even when secondary skills are allowed
+- Prefer environment-local skill names here; if names differ across installs, adapt the file per environment
+- Include cases where the skill should defer to a neighboring family entirely
+
+---
+
 ## history.json
 
 Tracks version progression in Improve mode. Located at workspace root.

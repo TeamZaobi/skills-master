@@ -1,6 +1,6 @@
 ---
 name: skills-master
-description: Use for skill or agent lifecycle work, especially when the user wants to upgrade or update an existing skill, sync with upstream, merge local customizations, verify which copy/path is live, or then refactor, evaluate, package, or redistribute it. Trigger on requests like "upgrade skill", "update skill", "sync upstream", "which copy is live", "升级 skill", "更新 skill", and "同步上游".
+description: Use for skill or agent lifecycle work, especially when the user wants to create, expand, update, compare, or test an existing skill or agent, sync with upstream, merge local customizations, verify which copy/path is live, measure with-skill versus without-skill quality, or package and redistribute it. Trigger on requests like "upgrade skill", "update skill", "add capability", "which copy is live", "E2E 测试", "增加能力", "更新 skill", "同步上游", "多工具支持", "检查路径", and "multi-tool support".
 ---
 
 # Skills Master
@@ -12,8 +12,11 @@ Use this skill to move a skill or companion agent project forward end to end. Do
 Use this skill not only for authoring or rewriting, but also when the user wants to:
 
 - upgrade an existing skill or agent from GitHub or another source
+- add a new capability, mode, or workflow without letting the asset sprawl
 - compare an installed copy against upstream or against another local copy
+- measure whether a prompt, skill, or rewrite actually improves quality against a baseline
 - find which path, copy, symlink, or projected bundle is actually live in a tool
+- check **multi-tool support** (多工具支持) by verifying symlinks across `claude`, `codex`, and `antigravity` discovery paths
 - relink, copy, package, or redistribute a skill or agent across tool directories
 - audit whether a previous upgrade or install was done correctly
 
@@ -29,6 +32,8 @@ Use this skill not only for authoring or rewriting, but also when the user wants
 - Do not mistake respect for additive-only editing. If a claim is wrong, stale, or overbroad, delete or rewrite it.
 - Separate portable guidance from platform-specific mechanics.
 - When the user only wants a focused cleanup, do that directly instead of forcing the full evaluation loop.
+- For meaningful modifications, upgrades, capability additions, or trigger rewrites, prefer controlled A/B E2E comparison over one anecdotal spot check.
+- Prefer bounded empirical tightening over purely speculative rewriting when live behavior is cheap to probe.
 
 ## Decide The Job
 
@@ -36,11 +41,12 @@ Classify the request into one primary mode before editing:
 
 1. **Create**: there is no usable skill or agent yet.
 2. **Upgrade or sync**: the asset exists and the user wants it refreshed from upstream, aligned across installs, or checked for version drift.
-3. **Refactor**: the asset exists but the structure, guidance, or scope is weak.
-4. **Document cleanup**: the repository drifted and the docs no longer match the real workflow.
-5. **Evaluate**: the user wants test prompts, benchmarks, or side-by-side comparison.
-6. **Optimize triggering**: the user wants better frontmatter descriptions and measurable trigger behavior for a skill.
-7. **Install, link, package, or distribute**: the asset is done and needs linking, projection, packaging, or copy-based rollout.
+3. **Expand capability**: the asset exists and the user wants to add a new mode, workflow, or boundary-aware ability without turning it into a kitchen sink.
+4. **Refactor**: the asset exists but the structure, guidance, or scope is weak.
+5. **Document cleanup**: the repository drifted and the docs no longer match the real workflow.
+6. **Evaluate**: the user wants test prompts, benchmarks, or side-by-side comparison.
+7. **Optimize triggering**: the user wants better frontmatter descriptions and measurable trigger behavior for a skill.
+8. **Install, link, package, or distribute**: the asset is done and needs linking, projection, packaging, or copy-based rollout.
 
 If several modes apply, handle them in this order:
 
@@ -79,7 +85,8 @@ When creating or reshaping a skill or agent, determine:
 2. When it should trigger or be selected
 3. What success looks like
 4. What output format or artifacts matter
-5. Whether the task benefits from formal evaluation or only qualitative review
+5. What existing behavior must remain stable if you are adding or widening a capability
+6. Whether the task benefits from formal evaluation or only qualitative review
 
 Also decide whether the planned edit is narrow or high-risk enough to justify the stronger pre-edit preflight below.
 
@@ -87,7 +94,7 @@ Pull answers from the conversation and repository first. Ask follow-up questions
 
 ## Pre-edit Preflight For Existing Assets
 
-When the user wants to modify, optimize, or rewrite an existing skill or agent, treat pre-edit preflight as the default decision gate before local optimization.
+When the user wants to modify, expand, optimize, or rewrite an existing skill or agent, treat pre-edit preflight as the default decision gate before local optimization.
 
 Run only the branches that add signal:
 
@@ -120,6 +127,7 @@ Use this stronger path when the change is likely to reshape the asset rather tha
 Typical triggers:
 
 - the change affects the core job, trigger boundary, adjacent-skill ownership, or source-of-truth model
+- the change adds a new capability, mode, or evaluation promise that could widen the surface area
 - the request combines competing goals such as broader triggering and tighter boundaries
 - the asset has meaningful local divergence and the edit direction is not obvious
 - the work looks like a refactor or scope rewrite rather than a narrow fix
@@ -194,6 +202,26 @@ Two guardrails matter here:
 - If your upgrade plan would discard local adaptations before they are inventoried and merged, it is unsafe.
 - Do not call the upgrade complete until the runtime consumer path has been checked.
 
+## Capability Expansion Workflow
+
+When the user wants to add a new ability to an existing skill or agent, do not treat that as "just another paragraph to append."
+
+Work in this order:
+
+1. State the smallest new job that needs to be absorbed.
+   Write it as a concrete ability, not as a vague ambition to be more helpful.
+2. Check adjacent ownership before you absorb it.
+   Ask whether an existing neighboring skill, script, reference file, or runtime adapter should own the work instead.
+3. Freeze the non-goals.
+   Record what the asset must still refuse, defer, or keep out of scope after the expansion.
+4. Choose the lightest container.
+   Put the new ability in the main skill only if it belongs on the core execution path. Otherwise prefer `references/`, `scripts/`, or `assets/`.
+5. Add evaluation before you widen triggering.
+   Create at least one positive case and one near-miss case that prove the new ability helps without collapsing the boundary.
+6. If the new ability is prompt-sensitive, stochastic, or easy to overfit, run a controlled A/B E2E comparison against a baseline before calling it done.
+
+The most common failure mode in capability expansion is not "missing detail." It is absorbing a new job without re-checking ownership, non-goals, and evaluation cost.
+
 ## Authoring Rules
 
 ### Frontmatter
@@ -244,6 +272,54 @@ If a reference file becomes large, add navigation hints or a small table of cont
 - Prefer generalizable guidance over examples that only fit one test case.
 - If the docs drifted because of multiple iterations, rewrite the affected section as a whole instead of appending more exceptions.
 - If a section only survives because "all changes must be additive", question that premise and re-check the repository truth.
+
+## Test-While-Editing Loop
+
+When a skill change depends on real host behavior, tool behavior, model drift, or
+evaluation results, do not finish the work in one speculative pass.
+
+Use a bounded `test -> classify -> narrow edit -> re-test` loop.
+
+This is lighter than full formal evals and often should happen before them.
+
+### When To Use It
+
+Use this loop when:
+
+- the skill's claimed workflow depends on live behavior you can cheaply probe
+- you are changing routing, prompt assembly, evaluation logic, or trigger wording
+- a failure report is real but the root cause is still unclear
+- you need to turn one-off observations into a durable skill rule without guessing
+
+### Loop Shape
+
+1. Choose the smallest representative probe.
+   Prefer one narrow run or a few targeted variants over a large batch.
+2. Observe and classify failure modes.
+   Do not stop at "bad result"; decide whether the issue is structure, route,
+   tool limitation, wording, or missing constraints.
+3. Edit the narrowest layer that can explain the failure.
+   This may be frontmatter, core workflow text, a reference file, a script, or a
+   routing rule.
+4. Re-run a targeted probe.
+   Change one primary variable when possible so the result teaches you
+   something.
+5. Decide whether to continue, rewrite more deeply, or reroute.
+
+### Guardrails
+
+- Do not run a huge eval suite before the first cheap probe if a smaller test
+  would expose the same problem faster.
+- Do not keep appending caveats to a structurally wrong section; rewrite the
+  section instead.
+- Do not change several major variables at once and then claim a clean causal
+  lesson.
+- Keep one representative failure and one best-so-far result when they explain
+  why the next edit happened.
+- If repeated probes show a backend or tool limitation, document the boundary
+  and change route instead of overfitting the skill text.
+- If the same failure repeats twice in the same direction, strongly consider a
+  route or structure change rather than more local patching.
 
 ### Structured Authoring: Combine Containers And Block Tags
 
@@ -300,7 +376,7 @@ Design rules:
 
 ## Evaluation Workflow
 
-Use the full loop only when it adds signal. For a small doc correction or a narrow rewrite, a lighter pass is usually better.
+Use the full loop only when it adds signal. For a small doc correction or a narrow rewrite, a lighter pass is usually better. For higher-leverage changes such as modifying, upgrading, expanding capability, or rewriting boundaries, prefer controlled A/B E2E comparison over a single spot check.
 
 ### When To Use Formal Evals
 
@@ -326,6 +402,26 @@ Use realistic prompts that a real user would actually send. Include relevant fil
 
 See `references/schemas.md` for the expected JSON structure.
 
+### Controlled A/B E2E Comparison For Skill Changes
+
+When the user asks whether a prompt or skill actually helps, or when you are modifying, upgrading, or expanding an existing asset, use a controlled A/B E2E comparison if the answer could change the design direction.
+
+1. Freeze the prompt set and scoring rubric before execution.
+   Do not rewrite the benchmark after seeing early failures unless you explicitly restart the run.
+2. Run matched conditions on the same prompts.
+   Typical pairs are `with_skill` versus `without_skill`, or `new_skill` versus `old_skill`.
+3. Isolate context per run.
+   If subagents or fresh sessions are available, use a new isolated worker for every run so one condition cannot leak into another.
+4. Repeat each prompt at least 3 times when the behavior is stochastic, wording-sensitive, or boundary-sensitive.
+5. Keep the execution contract constant.
+   Use the same model, same files, same artifact target, same response cap, and the same ban on meta commentary when that would contaminate scoring.
+6. Treat uncontrolled pilots as pilots.
+   If an early batch drifted in length, format, or leakage constraints, discard it instead of mixing it into the final benchmark.
+7. Score per prompt first, then read the aggregate.
+   Mean deltas matter, but a single boundary regression on one representative prompt can still invalidate the change.
+
+Use this method for prompt-value questions because it is much harder to fool than a one-off "feels better" answer.
+
 ### Run The Workspace Loop
 
 Put results in a sibling workspace named `<skill-name>-workspace/`.
@@ -343,7 +439,23 @@ When the environment supports independent task execution, run the skill version 
 - New skill: compare `with_skill` against `without_skill`
 - Existing skill rewrite: compare the new draft against a snapshot of the old skill
 
-Create `eval_metadata.json` per eval directory. Capture timing data as soon as the environment exposes it.
+Use separate condition directories and repeated runs when you want statistical signal:
+
+```text
+<skill-name>-workspace/
+└── iteration-1/
+    └── eval-0/
+        ├── with_skill/
+        │   ├── run-1/
+        │   ├── run-2/
+        │   └── run-3/
+        └── without_skill/
+            ├── run-1/
+            ├── run-2/
+            └── run-3/
+```
+
+Create `eval_metadata.json` per eval directory or run directory. Capture timing data as soon as the environment exposes it. See `references/schemas.md` for recommended metadata fields.
 
 ### Grade And Aggregate
 
@@ -376,6 +488,8 @@ When revising after feedback:
 - remove instructions that are not earning their keep
 - look for repeated helper work that should become a bundled script
 - avoid turning one stubborn edge case into a giant wall of rigid rules
+- if the same failure pattern survives two local edits, reconsider the route,
+  structure, or true scope instead of stacking more clauses
 
 Repeat the loop only while it produces meaningful improvement.
 
@@ -436,6 +550,8 @@ This loop evaluates the current description, proposes revisions, and keeps histo
 Take `best_description`, update the skill frontmatter, and show the before/after difference to the user with the measured scores.
 
 ## Linking And Packaging
+
+**Anti-pattern Warning:** When asked to check "multi-tool support paths" (多工具支持的路径), **DO NOT** attempt to guess and string-replace script paths inside `SKILL.md` (e.g. injecting `<SKILL_PATH>`). Instead, recognize that multi-tool support is determined by whether the skill is correctly **symlinked** into the various tool discovery directories using `link_skill.py`. Always run the `--status` check first.
 
 Use one editable source of truth:
 
