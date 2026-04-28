@@ -24,7 +24,7 @@ DEFAULT_GLOBAL_HUB = (Path.home() / ".agents" / "skills").resolve()
 
 SKILL_TEMPLATE = """---
 name: {skill_name}
-description: [TODO: Complete and informative explanation of what the skill does and when to use it. Include WHEN to use this skill - specific scenarios, file types, or tasks that trigger it.]
+description: [TODO: Describe the trigger family in user-intent terms. Keep it broad enough to catch the right work, but not so broad that it steals unrelated tasks. Include concrete WHEN to use signals.]
 ---
 
 # {skill_title}
@@ -32,6 +32,20 @@ description: [TODO: Complete and informative explanation of what the skill does 
 ## Overview
 
 [TODO: 1-2 sentences explaining what this skill enables]
+
+## When To Use / Not Use
+
+[TODO: State the primary user stories this skill should own, and the nearby cases
+it should NOT own. If adjacent skills or workflows exist, make the handoff
+boundary explicit.]
+
+## Multi-Skill Coordination
+
+[TODO: If this skill may coexist with adjacent skills, describe:
+- which user story makes this skill primary
+- when another skill may participate as a secondary collaborator
+- which reusable substeps should live in scripts/ or references/ instead of a sibling skill
+- any source-of-truth or exit-criteria constraints for orchestration]
 
 ## Structuring This Skill
 

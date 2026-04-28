@@ -19,6 +19,7 @@
 7. 优化 skill 的触发描述与结构组织
 8. 为 agents 建立单一真实源、跨工具投影与最小适配层
 9. 统一多个工具环境下的真实源、链接与分发方式
+10. 为外部插件包、命令包和 workflow runtime 设计薄适配层，而不是把它们误当成单个 `SKILL.md`
 
 如果一句话概括：**它是“用来开发和维护其他 skills 与 companion agents 的 skill”。**
 
@@ -131,6 +132,7 @@
 
 - `references/multi-skill-strategy.md`：多-skill 的拆分、合并和协同策略
 - `references/adjacent-skills.md`：常见邻接 skill 家族的 handoff 边界
+- `references/multi-tool-adaptation.md`：跨工具、插件包、命令包和 workflow runtime 的适配策略
 - `evals/boundary-evals.json`：多-skill 边界样例
 - `scripts/check_multi_skill_boundaries.py`：静态边界检查器
 
@@ -230,6 +232,7 @@
 4. [references/schemas.md](references/schemas.md)
 5. [references/multi-skill-strategy.md](references/multi-skill-strategy.md)
 6. [references/adjacent-skills.md](references/adjacent-skills.md)
+7. [references/multi-tool-adaptation.md](references/multi-tool-adaptation.md)
 
 其中：
 

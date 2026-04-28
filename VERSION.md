@@ -54,6 +54,6 @@
 
 建议下一次升版时机：
 
-1. 增加明确的 trigger eval 集，覆盖 upgrade / sync / merge / live-copy 判断等场景
+1. 将现有静态 boundary checker 扩展到动态多-skill 实测、安装路径变体与跨工具投影场景
 2. 为 skill 与 agent 的目录模板、投影策略提供更清晰的安装说明
 3. 如果后续补齐非 Claude 的 trigger-eval 实现，再考虑进一步升小版本

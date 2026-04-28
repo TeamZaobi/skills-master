@@ -1,6 +1,6 @@
 ---
 name: skills-master
-description: Use for skill or agent lifecycle work, especially when the user wants to create, expand, update, compare, or test an existing skill or agent, sync with upstream, merge local customizations, verify which copy/path is live, measure with-skill versus without-skill quality, or package and redistribute it. Trigger on requests like "upgrade skill", "update skill", "add capability", "which copy is live", "E2E 测试", "增加能力", "更新 skill", "同步上游", "多工具支持", "检查路径", and "multi-tool support".
+description: Use for skill or agent lifecycle work, especially when the user wants to create, expand, update, compare, or test an existing skill or agent, sync with upstream, merge local customizations, verify which copy/path is live, measure with-skill versus without-skill quality, or package and redistribute it. Trigger on requests like "upgrade skill", "update skill", "add capability", "which copy is live", "E2E 测试", "增加能力", "更新 skill", "同步上游", "多工具支持", "检查路径", "sidecar adapter", "workflow adapter", and "multi-tool support".
 ---
 
 # Skills Master
@@ -16,7 +16,7 @@ Use this skill not only for authoring or rewriting, but also when the user wants
 - compare an installed copy against upstream or against another local copy
 - measure whether a prompt, skill, or rewrite actually improves quality against a baseline
 - find which path, copy, symlink, or projected bundle is actually live in a tool
-- check **multi-tool support** (多工具支持) by verifying symlinks across `claude`, `codex`, and `antigravity` discovery paths
+- check **multi-tool support** (多工具支持) by verifying symlinks, projections, adapters, or upstream-installed bundles across `claude`, `codex`, `antigravity`, and sidecar workflow surfaces
 - relink, copy, package, or redistribute a skill or agent across tool directories
 - audit whether a previous upgrade or install was done correctly
 
@@ -551,7 +551,7 @@ Take `best_description`, update the skill frontmatter, and show the before/after
 
 ## Linking And Packaging
 
-**Anti-pattern Warning:** When asked to check "multi-tool support paths" (多工具支持的路径), **DO NOT** attempt to guess and string-replace script paths inside `SKILL.md` (e.g. injecting `<SKILL_PATH>`). Instead, recognize that multi-tool support is determined by whether the skill is correctly **symlinked** into the various tool discovery directories using `link_skill.py`. Always run the `--status` check first.
+**Anti-pattern Warning:** When asked to check "multi-tool support paths" (多工具支持的路径), **DO NOT** attempt to guess and string-replace script paths inside `SKILL.md` (e.g. injecting `<SKILL_PATH>`). For native skills and agents, multi-tool support is determined by whether the asset is correctly linked or projected into the target tool discovery directories using `link_skill.py` or `link_agent.py`. For sidecar plugins, slash-command packs, or workflow runtimes, first identify the upstream install surface and then add only a thin local adapter if the host cannot consume that surface directly. Always run the relevant `--status` or live discovery check first.
 
 Use one editable source of truth:
 
@@ -562,32 +562,46 @@ Use one editable source of truth:
 
 Link outward to tool-specific discovery folders instead of maintaining multiple editable copies.
 
+### Multi-Tool Adaptation
+
+Before linking or packaging, classify the asset shape:
+
+- **Native skill directory**: a directory with one `SKILL.md`; link it with `link_skill.py`.
+- **Native companion agent**: a directory with one `AGENT.md`; project or link it with `link_agent.py`.
+- **Multi-skill or plugin bundle**: a repository that contains several skills, commands, or host metadata; use the upstream installer or host plugin mechanism first, then verify the generated live paths.
+- **Command or workflow pack**: a command set, planning state, or workflow directory; install those files where the target tool expects them, and create a small adapter skill only when a host needs a trigger surface.
+- **Runtime or workflow engine**: a CLI, MCP server, web service, or DAG executor; install the runtime as a runtime, keep project workflow files in the project, and do not convert the whole engine into an always-on skill.
+
+If the asset is not a native skill or native agent, do not symlink the repository root into every tool. Preserve upstream as the canonical source, document the local projection, and make the adapter name the invocation path, version or commit, refresh command, and verification smoke.
+
+Use `references/multi-tool-adaptation.md` when the task involves Superpowers-style plugins, GSD-style command packs, gstack-style skill suites, Archon-style workflow runtimes, or any external tool that is not a single local `SKILL.md`.
+
 ### Initialize
 
 ```bash
-python scripts/init_skill.py my-skill --path ~/.agents/skills
-python scripts/init_agent.py review-agent --path ~/.agents/agents
+python3 scripts/init_skill.py my-skill --path ~/.agents/skills
+python3 scripts/init_agent.py review-agent --path ~/.agents/agents
 ```
 
 ### Link
 
 ```bash
-python scripts/link_skill.py <skill-path>
-python scripts/link_skill.py <skill-path> --status
-python scripts/link_agent.py <agent-path>
-python scripts/link_agent.py <agent-path> --status
+python3 scripts/link_skill.py <skill-path>
+python3 scripts/link_skill.py <skill-path> --status
+python3 scripts/link_agent.py <agent-path>
+python3 scripts/link_agent.py <agent-path> --status
 ```
 
 ### Validate
 
 ```bash
-python -m scripts.quick_validate <skill-or-agent-path>
+python3 -m scripts.quick_validate <skill-or-agent-path>
 ```
 
 ### Package
 
 ```bash
-python -m scripts.package_skill <skill-path>
+python3 -m scripts.package_skill <skill-path>
 ```
 
 Package only after the skill content and metadata are stable enough to share. For agents, prefer rendering or linking to official tool directories instead of inventing a private package format.
@@ -612,6 +626,7 @@ Do not assume every environment has the same features.
 - If there is no browser, export static HTML or present results inline.
 - If there is no Anthropic stack, skip trigger optimization.
 - If a tool cannot consume the canonical asset shape directly, generate a thin adapter rather than forking the source text.
+- If an external tool has its own installer, command registry, workflow directory, or runtime daemon, adapt to that surface instead of rewriting it into a local skill by default.
 - If the user only asked for documentation cleanup, do not drag them through benchmarking machinery they did not ask for.
 
 ## Reference Files
@@ -624,6 +639,7 @@ Read these only when they are relevant to the current task:
 - `references/schemas.md`
 - `references/workflows.md`
 - `references/output-patterns.md`
+- `references/multi-tool-adaptation.md`
 
 ## Final Check
 
