@@ -1,0 +1,82 @@
+[
+  {
+    "query": "帮我从零创建一个 skill，用来规范 AI 代码审查输出格式。",
+    "should_trigger": true
+  },
+  {
+    "query": "给这个项目搭一个 companion agent，负责 benchmark 结果分析和总结。",
+    "should_trigger": true
+  },
+  {
+    "query": "升级这个已安装的 skill，先看看 upstream 最近有没有变化，再决定怎么合并本地定制。",
+    "should_trigger": true
+  },
+  {
+    "query": "确认 Codex 现在真正读取的是哪一份 skill，不要只看源码仓库。",
+    "should_trigger": true
+  },
+  {
+    "query": "把这个 skill 重新链接到 Claude 和 Codex 的目录，并确认 live path。",
+    "should_trigger": true
+  },
+  {
+    "query": "这个 skill 越改越乱了，帮我重写 SKILL.md，删掉过拟合出来的规则。",
+    "should_trigger": true
+  },
+  {
+    "query": "README、SKILL.md 和脚本能力已经对不上了，帮我做一次文档校正。",
+    "should_trigger": true
+  },
+  {
+    "query": "给这个 skill 建一套 eval、人工 review 和 benchmark 闭环。",
+    "should_trigger": true
+  },
+  {
+    "query": "优化这个 skill 的 frontmatter description，让触发边界更准。",
+    "should_trigger": true
+  },
+  {
+    "query": "比较 GitHub upstream、本地 source of truth 和 live copy 的差异，再决定 merge 方案。",
+    "should_trigger": true
+  },
+  {
+    "query": "为这个 agent 建单一真实源和跨工具投影，不要维护多份手改副本。",
+    "should_trigger": true
+  },
+  {
+    "query": "帮我修这个 React 首页的布局和配色。",
+    "should_trigger": false
+  },
+  {
+    "query": "写一个 Python 脚本，把多个 CSV 合并成一个文件。",
+    "should_trigger": false
+  },
+  {
+    "query": "给这个仓库加 GitHub Actions CI 和 lint。",
+    "should_trigger": false
+  },
+  {
+    "query": "帮我实现一个聊天 agent 的业务逻辑和 API，不需要管理 skill 或安装目录。",
+    "should_trigger": false
+  },
+  {
+    "query": "做一个通用的多 agent orchestration 框架，不用考虑现有 skills 的 source of truth。",
+    "should_trigger": false
+  },
+  {
+    "query": "只想把 README 改得更有营销感，不需要对齐真实脚本和工作流。",
+    "should_trigger": false
+  },
+  {
+    "query": "帮我优化数据库索引，解决 PostgreSQL 慢查询。",
+    "should_trigger": false
+  },
+  {
+    "query": "把这个 PDF 批量转成 Markdown，不需要做成 skill。",
+    "should_trigger": false
+  },
+  {
+    "query": "帮我给客服机器人润色 prompt，让说话更像真人，不涉及 skill 或 agent 文件。",
+    "should_trigger": false
+  }
+]
