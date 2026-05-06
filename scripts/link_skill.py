@@ -1,9 +1,17 @@
 #!/usr/bin/env python3
 """
-Skill Linker - Manage symlinks for multi-tool skill discovery
+Skill Linker - Manage directory-style projections for skill discovery.
 
-Creates/queries/removes symbolic links from a skill's source directory
-to the skills directories of confirmed development tools.
+Creates/queries/removes symbolic links from a skill's editable source
+directory to tool-specific skill directories. This script deliberately
+models directory-style projections only.
+
+Runtime config discovery roots are different: Hermes `skills.external_dirs`
+and OpenClaw `skills.load.extraDirs` should be managed in their host config
+files, then validated with `hermes skills list`, `hermes config check`,
+`openclaw skills list --json`, and `openclaw config validate`. OpenClaw may
+skip symlink escapes, so cover linked-out skills by adding the real parent
+directory to `skills.load.extraDirs` rather than copying skill bodies.
 
 Usage:
     link_skill.py <skill-path>                        # Link to default user-level targets
@@ -26,14 +34,38 @@ import os
 from pathlib import Path
 
 # ─── Default link targets ───────────────────────────────────────────
-# Claude Code official docs define ~/.claude/skills and .claude/skills.
-# OpenAI Codex official docs define ~/.agents/skills and .agents/skills.
-# Google Antigravity official docs define ~/.gemini/antigravity/skills globally
-# and <workspace-root>/.agents/skills at the workspace level.
+# Keep one editable source of truth and project outward to tool-local
+# discovery folders. Some local setups also expose compatibility mirrors
+# in addition to the primary documented path. Tools that use runtime config
+# extraDirs, such as Hermes and OpenClaw, are documented in SKILL.md/README.md
+# instead of being modeled here as symlink targets.
 LINK_TARGETS = {
-    "claude": ".claude/skills",
-    "codex":  ".agents/skills",
-    "antigravity": ".gemini/antigravity/skills",
+    "claude": {
+        "user": [
+            {"label": "claude", "path": ".claude/skills", "link_allowed": True},
+        ],
+        "project": [
+            {"label": "claude", "path": ".claude/skills", "link_allowed": True},
+        ],
+    },
+    "codex": {
+        "user": [
+            {"label": "codex", "path": ".agents/skills", "link_allowed": True},
+            {"label": "codex-home", "path": ".codex/skills", "link_allowed": True},
+        ],
+        "project": [
+            {"label": "codex", "path": ".agents/skills", "link_allowed": True},
+        ],
+    },
+    "antigravity": {
+        "user": [
+            {"label": "antigravity", "path": ".gemini/antigravity/skills", "link_allowed": True},
+            {"label": "gemini", "path": ".gemini/skills", "link_allowed": True},
+        ],
+        "project": [
+            {"label": "antigravity", "path": ".agents/skills", "link_allowed": False},
+        ],
+    },
 }
 
 USER_DEFAULT_TARGETS = ["claude", "codex", "antigravity"]
@@ -53,23 +85,24 @@ def resolve_skill_path(raw_path):
     return skill_path
 
 
-def get_target_dir(tool_name):
-    """Return the absolute path of a tool's skills directory."""
-    rel = LINK_TARGETS.get(tool_name)
-    if rel is None:
-        return None
-    return Path.home() / rel
+def get_target_entries(tool_name, project_root=None):
+    """Return resolved target entries for the given tool and scope."""
+    spec = LINK_TARGETS.get(tool_name)
+    if spec is None:
+        return []
 
-
-def get_project_target_dir(tool_name, project_root):
-    """Return the absolute path of a tool's project-local skills directory."""
-    rel = LINK_TARGETS.get(tool_name)
-    if rel is None:
-        return None
-    project_root = Path(project_root).expanduser().resolve()
-    if tool_name == "antigravity":
-        return project_root / ".agents" / "skills"
-    return project_root / rel
+    scope = "project" if project_root is not None else "user"
+    base_dir = Path(project_root).expanduser().resolve() if project_root is not None else Path.home()
+    entries = []
+    for entry in spec[scope]:
+        entries.append(
+            {
+                "label": entry["label"],
+                "dir": (base_dir / entry["path"]).resolve(),
+                "link_allowed": entry["link_allowed"],
+            }
+        )
+    return entries
 
 
 def default_targets(project_root=None):
@@ -77,24 +110,9 @@ def default_targets(project_root=None):
     return PROJECT_DEFAULT_TARGETS if project_root is not None else USER_DEFAULT_TARGETS
 
 
-def is_native_skill_path(skill_path, tool_name, project_root=None):
-    """Return True when the skill already lives in a tool's native path."""
-    target_dir = (
-        get_project_target_dir(tool_name, project_root)
-        if project_root is not None
-        else get_target_dir(tool_name)
-    )
-    if target_dir is None:
-        return False
+def is_native_skill_path(skill_path, target_dir):
+    """Return True when the skill already lives in the target directory."""
     return skill_path.parent == target_dir.resolve()
-
-
-def is_project_native_antigravity_skill(skill_path, project_root):
-    """Return True when the skill already lives in Antigravity's native project path."""
-    if project_root is None:
-        return False
-    native_dir = get_project_target_dir("antigravity", project_root)
-    return skill_path.parent == native_dir
 
 
 def compute_relative_symlink(link_location, target_real_path):
@@ -124,67 +142,53 @@ def link_skill(skill_path, targets=None, force=False, project_root=None):
     created, skipped, warnings = 0, 0, 0
 
     for tool in targets:
-        if is_native_skill_path(skill_path, tool, project_root):
-            target_dir = (
-                get_project_target_dir(tool, project_root)
-                if project_root is not None
-                else get_target_dir(tool)
-            )
-            print(f"  ✓  {tool}: native path {target_dir} (no link needed)")
-            skipped += 1
-            continue
-
-        if tool == "antigravity" and project_root is not None:
-            native_dir = get_project_target_dir(tool, project_root)
-            if is_project_native_antigravity_skill(skill_path, project_root):
-                print(f"  ✓  {tool}: native project skill path {native_dir} (no link needed)")
-                skipped += 1
-            else:
-                print(f"  ⚠  {tool}: project skills must live under {native_dir}; no link created")
-                warnings += 1
-            continue
-
-        target_dir = (
-            get_project_target_dir(tool, project_root)
-            if project_root is not None
-            else get_target_dir(tool)
-        )
-        if target_dir is None:
+        entries = get_target_entries(tool, project_root)
+        if not entries:
             print(f"  ⚠  Unknown tool: {tool}")
             warnings += 1
             continue
 
-        # Ensure target skills directory exists
-        target_dir.mkdir(parents=True, exist_ok=True)
+        for entry in entries:
+            target_dir = entry["dir"]
+            label = entry["label"]
 
-        link_path = target_dir / skill_name
-        rel_target = compute_relative_symlink(link_path, skill_path)
-
-        if link_path.is_symlink():
-            existing = os.readlink(link_path)
-            # Normalize: resolve relative to the link's parent
-            existing_resolved = (link_path.parent / existing).resolve()
-            if existing_resolved == skill_path:
-                print(f"  ✓  {tool}: already linked (skipped)")
+            if is_native_skill_path(skill_path, target_dir):
+                print(f"  ✓  {label}: native path {target_dir} (no link needed)")
                 skipped += 1
                 continue
-            else:
+
+            if not entry["link_allowed"]:
+                print(f"  ⚠  {label}: expected source under {target_dir}; no link created")
+                warnings += 1
+                continue
+
+            target_dir.mkdir(parents=True, exist_ok=True)
+
+            link_path = target_dir / skill_name
+            rel_target = compute_relative_symlink(link_path, skill_path)
+
+            if link_path.is_symlink():
+                existing = os.readlink(link_path)
+                existing_resolved = (link_path.parent / existing).resolve()
+                if existing_resolved == skill_path:
+                    print(f"  ✓  {label}: already linked (skipped)")
+                    skipped += 1
+                    continue
                 if force:
                     link_path.unlink()
-                    print(f"  ⚡ {tool}: overwriting (was → {existing})")
+                    print(f"  ⚡ {label}: overwriting (was → {existing})")
                 else:
-                    print(f"  ⚠  {tool}: exists but points to {existing} (use --force to overwrite)")
+                    print(f"  ⚠  {label}: exists but points to {existing} (use --force to overwrite)")
                     warnings += 1
                     continue
-        elif link_path.exists():
-            print(f"  ⚠  {tool}: {link_path} exists as a real directory/file, skipping")
-            warnings += 1
-            continue
+            elif link_path.exists():
+                print(f"  ⚠  {label}: {link_path} exists as a real directory/file, skipping")
+                warnings += 1
+                continue
 
-        # Create the symlink
-        link_path.symlink_to(rel_target)
-        print(f"  ✅ {tool}: {link_path} → {rel_target}")
-        created += 1
+            link_path.symlink_to(rel_target)
+            print(f"  ✅ {label}: {link_path} → {rel_target}")
+            created += 1
 
     return created, skipped, warnings
 
@@ -203,33 +207,33 @@ def unlink_skill(skill_path, targets=None, project_root=None):
     removed, not_found = 0, 0
 
     for tool in targets:
-        if is_native_skill_path(skill_path, tool, project_root):
-            print(f"  -  {tool}: native path (no link to remove)")
-            not_found += 1
+        entries = get_target_entries(tool, project_root)
+        if not entries:
             continue
 
-        if tool == "antigravity" and project_root is not None:
-            print(f"  -  {tool}: project scope uses native .agents/skills path")
-            not_found += 1
-            continue
+        for entry in entries:
+            target_dir = entry["dir"]
+            label = entry["label"]
 
-        target_dir = (
-            get_project_target_dir(tool, project_root)
-            if project_root is not None
-            else get_target_dir(tool)
-        )
-        if target_dir is None:
-            continue
+            if is_native_skill_path(skill_path, target_dir):
+                print(f"  -  {label}: native path (no link to remove)")
+                not_found += 1
+                continue
 
-        link_path = target_dir / skill_name
+            if not entry["link_allowed"]:
+                print(f"  -  {label}: scope expects a native source")
+                not_found += 1
+                continue
 
-        if link_path.is_symlink():
-            link_path.unlink()
-            print(f"  🗑  {tool}: removed {link_path}")
-            removed += 1
-        else:
-            print(f"  -  {tool}: no link found")
-            not_found += 1
+            link_path = target_dir / skill_name
+
+            if link_path.is_symlink():
+                link_path.unlink()
+                print(f"  🗑  {label}: removed {link_path}")
+                removed += 1
+            else:
+                print(f"  -  {label}: no link found")
+                not_found += 1
 
     return removed, not_found
 
@@ -252,44 +256,35 @@ def status_skill(skill_path, targets=None, project_root=None):
     print(f"   Scope: {scope_label}\n")
 
     for tool in targets:
-        if is_native_skill_path(skill_path, tool, project_root):
-            native_dir = (
-                get_project_target_dir(tool, project_root)
-                if project_root is not None
-                else get_target_dir(tool)
-            )
-            print(f"  ✅ {tool:12s} native path ({native_dir})")
+        entries = get_target_entries(tool, project_root)
+        if not entries:
             continue
 
-        if tool == "antigravity" and project_root is not None:
-            native_dir = get_project_target_dir(tool, project_root)
-            if is_project_native_antigravity_skill(skill_path, project_root):
-                print(f"  ✅ {tool:12s} native project path ({native_dir})")
+        for entry in entries:
+            target_dir = entry["dir"]
+            label = entry["label"]
+
+            if is_native_skill_path(skill_path, target_dir):
+                print(f"  ✅ {label:12s} native path ({target_dir})")
+                continue
+
+            if not entry["link_allowed"]:
+                print(f"  ⚠  {label:12s} expected source under {target_dir}")
+                continue
+
+            link_path = target_dir / skill_name
+
+            if link_path.is_symlink():
+                dest = os.readlink(link_path)
+                dest_resolved = (link_path.parent / dest).resolve()
+                if dest_resolved == skill_path:
+                    print(f"  ✅ {label:12s} → {dest} (correct)")
+                else:
+                    print(f"  ⚠  {label:12s} → {dest} (MISMATCH, expected → {skill_path})")
+            elif link_path.exists():
+                print(f"  📁 {label:12s} real directory (not a symlink)")
             else:
-                print(f"  ⚠  {tool:12s} expected source under {native_dir}")
-            continue
-
-        target_dir = (
-            get_project_target_dir(tool, project_root)
-            if project_root is not None
-            else get_target_dir(tool)
-        )
-        if target_dir is None:
-            continue
-
-        link_path = target_dir / skill_name
-
-        if link_path.is_symlink():
-            dest = os.readlink(link_path)
-            dest_resolved = (link_path.parent / dest).resolve()
-            if dest_resolved == skill_path:
-                print(f"  ✅ {tool:8s} → {dest} (correct)")
-            else:
-                print(f"  ⚠  {tool:8s} → {dest} (MISMATCH, expected → {skill_path})")
-        elif link_path.exists():
-            print(f"  📁 {tool:8s}   real directory (not a symlink)")
-        else:
-            print(f"  ❌ {tool:8s}   not linked")
+                print(f"  ❌ {label:12s} not linked")
 
 
 def parse_targets(targets_str):

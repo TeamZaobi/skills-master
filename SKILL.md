@@ -1,6 +1,6 @@
 ---
 name: skills-master
-description: Use for skill or agent lifecycle work, especially when the user wants to create, expand, update, compare, or test an existing skill or agent, sync with upstream, merge local customizations, verify which copy/path is live, measure with-skill versus without-skill quality, or package and redistribute it. Trigger on requests like "upgrade skill", "update skill", "add capability", "which copy is live", "E2E 测试", "增加能力", "更新 skill", "同步上游", "多工具支持", "检查路径", "sidecar adapter", "workflow adapter", and "multi-tool support".
+description: Use for skill or agent lifecycle work, especially when the user wants to create, expand, update, compare, or test an existing skill or agent, sync with upstream, merge local customizations, verify which copy/path is live, measure with-skill versus without-skill quality, or package and redistribute it. Trigger on requests like "upgrade skill", "update skill", "add capability", "which copy is live", "E2E 测试", "增加能力", "更新 skill", "同步上游", "多工具支持", "检查路径", "sidecar adapter", "workflow adapter", and "multi-tool support", plus explicit invocations such as "/skillsmaster", "$skills-master", or "use SkillsMaster".
 ---
 
 # Skills Master
@@ -19,6 +19,9 @@ Use this skill not only for authoring or rewriting, but also when the user wants
 - check **multi-tool support** (多工具支持) by verifying symlinks, projections, adapters, or upstream-installed bundles across `claude`, `codex`, `antigravity`, and sidecar workflow surfaces
 - relink, copy, package, or redistribute a skill or agent across tool directories
 - audit whether a previous upgrade or install was done correctly
+- explicitly invoke the skill by name, for example `/skillsmaster`, `$skills-master`, or direct requests such as "use SkillsMaster"
+
+Treat explicit invocation as a strong routing signal. Do not down-rank this skill just because the surface wording looks like generic repository cleanup or documentation maintenance when the user has directly named `skills-master`.
 
 When not to use: do not use this skill for ordinary product requirements, project source-of-truth governance, code implementation, data-plane runtime behavior, or visual generation unless the problem is specifically about the live skill or agent asset.
 
@@ -117,6 +120,7 @@ Guardrail: a repository being current does not mean the live skill or agent is c
 3. Prefer one clean rewrite over stacking caveats.
 4. Preserve live behavior unless the change explicitly intends to alter it.
 5. Keep `SKILL.md` as live operating instructions; move background, variants, schemas, examples, and long rubrics to `references/`, `scripts/`, `assets/`, or `evals/`.
+6. Use `references/structure-boundaries.md` when repeated edits make it unclear whether content belongs in `SKILL.md`, a reference, a script, or structured data.
 
 ## Authoring Rules
 
@@ -199,6 +203,7 @@ Read only when relevant:
 - `references/output-patterns.md`
 - `references/adjacent-skills.md`
 - `references/multi-skill-strategy.md`
+- `references/structure-boundaries.md`
 - `evals/boundary-evals.json`
 - `evals/trigger-evals.json`
 

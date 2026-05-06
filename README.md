@@ -144,6 +144,9 @@
 - “看看 GitHub 有没有新版并同步到 Codex / Claude”
 - “确认本机现在生效的是哪一份 skill”
 - “把这个 skill 重新链接到另一个工具目录”
+- 直接点名 `skills-master` / `SkillsMaster`
+- 用宿主显式调用这个 skill，例如 `/skillsmaster`
+- 直接说“用 SkillsMaster 处理这件事”
 
 原因很简单：这类任务的关键不是 `git pull`，而是 skill / agent 生命周期管理。真正要先分清的是：
 
@@ -233,6 +236,7 @@
 5. [references/multi-skill-strategy.md](references/multi-skill-strategy.md)
 6. [references/adjacent-skills.md](references/adjacent-skills.md)
 7. [references/multi-tool-adaptation.md](references/multi-tool-adaptation.md)
+8. [references/structure-boundaries.md](references/structure-boundaries.md)
 
 其中：
 
