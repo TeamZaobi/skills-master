@@ -236,6 +236,34 @@ codex_native_allowed_frontmatter_keys = ["allowed-tools", "compatibility", "desc
         self.assertNotIn("unsupported_frontmatter_key", [item["category"] for item in findings])
         self.assertIn("source_managed_frontmatter_extension", [item["category"] for item in observations])
 
+    def test_source_checkout_contract_prevents_local_owner_rewrite(self):
+        import importlib.util
+        module_path = Path(__file__).resolve().parent.parent / "scripts" / "content_audit.py"
+        spec = importlib.util.spec_from_file_location("content_audit_source_contract", module_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        checkout = self.root / "upstream-checkout"
+        skill_path = checkout / "skills" / "example"
+        management = module.source_management_for(
+            str(skill_path),
+            {"name": "example"},
+            [{"name": "example", "role": "user_canonical", "entry_type": "symlink"}],
+            {},
+            [{
+                "id": "upstream-v1",
+                "path": str(checkout),
+                "class": "upstream_source_checkout",
+                "mutation_owner": "upstream_or_fork",
+                "local_rewrite": "prohibited_without_fork",
+                "source_url": "https://example.invalid/upstream.git",
+                "pinned_commit": "abc123",
+            }],
+        )
+        self.assertEqual(management["class"], "upstream_source_checkout")
+        self.assertEqual(management["mutation_owner"], "upstream_or_fork")
+        self.assertEqual(management["local_rewrite"], "prohibited_without_fork")
+        self.assertEqual(management["source_contract"]["pinned_commit"], "abc123")
+
     def test_repo_contract_extension_is_observation_but_undeclared_extension_is_finding(self):
         import importlib.util
         module_path = Path(__file__).resolve().parent.parent / "scripts" / "content_audit.py"

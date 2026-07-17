@@ -94,6 +94,7 @@ def source_management_for(
     representative: dict,
     occurrences: list[dict],
     skill_lock: dict[str, dict],
+    source_contracts: list[dict] | None = None,
 ) -> dict:
     name = representative.get("name", "")
     user_canonical_real_dir = any(
@@ -111,6 +112,24 @@ def source_management_for(
             "source_type": locked.get("sourceType", ""),
             "source_url": locked.get("sourceUrl", ""),
             "updated_at": locked.get("updatedAt", ""),
+        }
+    path = Path(realpath).expanduser().resolve(strict=False)
+    for contract in source_contracts or []:
+        root = Path(contract.get("path", "")).expanduser().resolve(strict=False)
+        try:
+            path.relative_to(root)
+        except ValueError:
+            continue
+        return {
+            "class": contract.get("class", "upstream_source_checkout"),
+            "mutation_owner": contract.get("mutation_owner", "upstream_or_fork"),
+            "local_rewrite": contract.get("local_rewrite", "prohibited_without_fork"),
+            "source_contract": {
+                "id": contract.get("id", "source-contract"),
+                "path": str(root),
+                "source_url": contract.get("source_url", ""),
+                "pinned_commit": contract.get("pinned_commit", ""),
+            },
         }
     if representative.get("repo") or any(item.get("repo") for item in occurrences):
         repo = representative.get("repo") or next((item.get("repo") for item in occurrences if item.get("repo")), "")
@@ -425,6 +444,7 @@ def main() -> int:
     allowed_frontmatter_keys = set(content_policy.get("codex_native_allowed_frontmatter_keys", DEFAULT_FRONTMATTER_KEYS))
     lock_path, skill_lock = load_skill_lock(content_policy.get("skill_lock"))
     frontmatter_contracts = policy.get("frontmatter_contract", [])
+    source_contracts = policy.get("content_source_contract", [])
     statuses = registry_statuses(inventory)
 
     grouped: dict[str, list[dict]] = defaultdict(list)
@@ -463,7 +483,13 @@ def main() -> int:
                 occurrences[0],
             ),
         )
-        source_management = source_management_for(realpath, representative, occurrences, skill_lock)
+        source_management = source_management_for(
+            realpath,
+            representative,
+            occurrences,
+            skill_lock,
+            source_contracts,
+        )
         frontmatter_contract = frontmatter_contract_for(realpath, frontmatter_contracts)
         if frontmatter_contract:
             source_management["frontmatter_contract"] = frontmatter_contract
