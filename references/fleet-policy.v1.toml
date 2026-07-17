@@ -53,6 +53,15 @@ local_rewrite = "prohibited_without_upstream_or_fork"
 source_url = ""
 pinned_commit = ""
 
+[[installer_command_contract]]
+id = "skills-cli-check-mutates-v1"
+command = "npx skills check"
+classification = "mutating"
+observed_at = "2026-07-17T12:20:27Z"
+observed_effect = "Updated five live global Skills and their lock entries; the command is not a read-only freshness probe."
+required_controls = ["snapshot_live_lock_and_skill_digests", "run_against_an_isolated_home_first", "review_source_and_capability_delta", "rerun_fleet_cycle_before_acceptance"]
+prohibited_assumption = "Do not infer read-only behavior from the check subcommand name or help text."
+
 [[frontmatter_contract]]
 id = "hermes-native-v1"
 repo = "~/Agents/hermes-muniu"
