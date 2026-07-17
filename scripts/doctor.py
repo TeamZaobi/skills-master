@@ -131,6 +131,7 @@ class RepositoryDoctor:
             seen_names.add(name)
             self._check_consumer_skill(consumer)
 
+        self._check_kimi_shadow()
         return self.findings
 
     def _load_projections(self):
@@ -396,6 +397,30 @@ class RepositoryDoctor:
                     "projection_mismatch",
                     f"Projection {projection_id} resolves to {direct_target.resolve()}, expected {source.resolve()}",
                     link_path,
+                )
+
+    def _check_kimi_shadow(self):
+        # Kimi Code discovers project skills from both .agents/skills and
+        # .kimi-code/skills, and resolves a duplicated name from
+        # .kimi-code/skills first. Co-projecting one canonical source to both
+        # directories is redundant but harmless; two different realpaths
+        # behind one name makes Kimi see different content than the other
+        # hosts, so that divergence is an error.
+        shared = self.root / ".agents" / "skills"
+        kimi = self.root / ".kimi-code" / "skills"
+        if not shared.is_dir() or not kimi.is_dir():
+            return
+        shared_names = {entry.name for entry in shared.iterdir()}
+        for entry in sorted(kimi.iterdir()):
+            if entry.name not in shared_names:
+                continue
+            shared_real = (shared / entry.name).resolve()
+            if entry.resolve() != shared_real:
+                self.error(
+                    "projection_kimi_shadow",
+                    f"Kimi Code resolves {entry.name} from .kimi-code/skills first, "
+                    f"but it points to {entry.resolve()} while .agents/skills points to {shared_real}",
+                    entry,
                 )
 
     def _check_markdown_links(self, source):

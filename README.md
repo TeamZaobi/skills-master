@@ -21,8 +21,10 @@ into references and deterministic work into scripts.
 # Create a repository-owned distributable skill.
 python3 scripts/init_skill.py my-skill --layout repo-product --project-root /path/to/repo
 
-# Validate one asset and then its repository topology.
+# Validate one standalone asset.
 python3 -m scripts.quick_validate /path/to/repo/skills/my-skill
+
+# Validate repository topology when the repository declares skills/registry.toml.
 python3 scripts/doctor.py /path/to/repo
 
 # Inspect or refresh direct host projections.

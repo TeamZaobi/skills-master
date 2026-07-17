@@ -14,6 +14,14 @@ description: Use when testing {name}.
 # {name}
 """
 
+KIMI_PROJECTION = """[[projection]]
+id = "kimi"
+path = ".kimi-code/skills"
+hosts = ["kimi"]
+required = false
+
+"""
+
 
 class LayoutGovernanceTests(unittest.TestCase):
     def setUp(self):
@@ -44,7 +52,12 @@ class LayoutGovernanceTests(unittest.TestCase):
         findings = doctor.run()
         return findings, summarize(findings)
 
-    def repo_registry(self, skill_block, dependencies=""):
+    def test_doctor_requires_registry_backed_repository(self):
+        findings, counts = self.run_doctor()
+        self.assertEqual(counts["error"], 1)
+        self.assertEqual([item.code for item in findings], ["registry_missing"])
+
+    def repo_registry(self, skill_block, dependencies="", extra_projections=""):
         return f"""version = 2
 layout = "repo_product"
 canonical_dir = "skills"
@@ -61,7 +74,7 @@ path = ".claude/skills"
 hosts = ["claude"]
 required = true
 
-{skill_block}
+{extra_projections}{skill_block}
 {dependencies}
 """
 
@@ -326,6 +339,65 @@ targets = ["agents", "claude"]
         )
         findings, _ = self.run_doctor()
         self.assertIn("consumer_shadow_copy", {item.code for item in findings})
+
+    def test_kimi_projection_one_hop_is_valid(self):
+        source = self.root / "skills" / "kimi-ok"
+        self.write_skill(source, "kimi-ok")
+        self.direct_projection(self.root / ".agents" / "skills", "kimi-ok", source)
+        self.direct_projection(self.root / ".claude" / "skills", "kimi-ok", source)
+        self.direct_projection(self.root / ".kimi-code" / "skills", "kimi-ok", source)
+        self.write_registry(
+            self.repo_registry(
+                """[[skill]]
+name = "kimi-ok"
+source = "skills/kimi-ok"
+targets = ["agents", "claude", "kimi"]
+""",
+                extra_projections=KIMI_PROJECTION,
+            )
+        )
+        findings, counts = self.run_doctor()
+        self.assertEqual(counts["error"], 0, findings)
+        self.assertNotIn("projection_kimi_shadow", {item.code for item in findings})
+
+    def test_kimi_projection_is_opt_in(self):
+        source = self.root / "skills" / "shared-only"
+        self.write_skill(source, "shared-only")
+        self.direct_projection(self.root / ".agents" / "skills", "shared-only", source)
+        self.direct_projection(self.root / ".claude" / "skills", "shared-only", source)
+        self.write_registry(
+            self.repo_registry(
+                """[[skill]]
+name = "shared-only"
+source = "skills/shared-only"
+targets = ["agents", "claude"]
+""",
+                extra_projections=KIMI_PROJECTION,
+            )
+        )
+        findings, counts = self.run_doctor()
+        self.assertEqual(counts["error"], 0, findings)
+        self.assertNotIn("projection_kimi_shadow", {item.code for item in findings})
+        self.assertFalse((self.root / ".kimi-code" / "skills" / "shared-only").exists())
+
+    def test_kimi_shadow_detects_diverging_duplicate(self):
+        source = self.root / "skills" / "shadowed"
+        self.write_skill(source, "shadowed")
+        self.direct_projection(self.root / ".agents" / "skills", "shadowed", source)
+        self.direct_projection(self.root / ".claude" / "skills", "shadowed", source)
+        self.write_skill(self.root / ".kimi-code" / "skills" / "shadowed", "shadowed")
+        self.write_registry(
+            self.repo_registry(
+                """[[skill]]
+name = "shadowed"
+source = "skills/shadowed"
+targets = ["agents", "claude"]
+""",
+                extra_projections=KIMI_PROJECTION,
+            )
+        )
+        findings, _ = self.run_doctor()
+        self.assertIn("projection_kimi_shadow", {item.code for item in findings})
 
 
 if __name__ == "__main__":

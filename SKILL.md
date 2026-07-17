@@ -59,9 +59,10 @@ Use the cheapest proof that covers the change:
 
 ```bash
 python3 -m scripts.quick_validate <skill-or-agent-path>
-python3 scripts/doctor.py <project-root>
 python3 scripts/link_skill.py <skill-path> --status
 python3 -m scripts.package_skill <skill-path>
+# Registry-backed repositories only:
+python3 scripts/doctor.py <project-root>
 ```
 
 Open a fresh host session when discovery is cached. Add a positive smoke and a
@@ -80,6 +81,8 @@ inside the intended boundary.
   [`references/structure-boundaries.md`](references/structure-boundaries.md)
 - Multi-skill ownership and handoff:
   [`references/multi-skill-strategy.md`](references/multi-skill-strategy.md)
+- External method-skill adaptation, including TDD / BDD:
+  [`references/multi-tool-adaptation.md`](references/multi-tool-adaptation.md)
 - Evaluation schemas and outputs:
   [`references/schemas.md`](references/schemas.md) and
   [`references/output-patterns.md`](references/output-patterns.md)

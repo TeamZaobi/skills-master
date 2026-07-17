@@ -21,6 +21,9 @@ also declares the build command, output directory, and reproducibility check.
 - A projection is read-only and points directly to the canonical directory.
 - A host projection cannot target another host projection.
 - Several hosts may share one discovery directory when they support it.
+- Kimi Code shares the `.agents/skills` discovery directory with Codex and
+  Gemini. A separate `.kimi-code/skills` projection is optional; when both
+  expose the same name, Kimi resolves it from `.kimi-code/skills` first.
 - A compatibility projection is explicit in the registry and removable after a
   fresh-session discovery check passes through the primary path.
 - A real directory at a projection target is protected; linking requires a

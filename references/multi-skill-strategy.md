@@ -80,6 +80,19 @@ Examples:
 - persistent planning alongside a long-running skill refactor
 - GitHub metadata lookup while the primary task remains skill lifecycle work
 
+Use the final deliverable to choose the primary owner:
+
+- research report or evidence synthesis: the research skill is primary
+- durable execution plan or status log: the planning skill is primary
+- pull request, issue, CI, or review operation: the GitHub skill is primary
+- product code, visual design, or user-facing behavior: the implementation
+  skill is primary
+- skill source, trigger, packaging, projection, or discovery change:
+  `skills-master` is primary
+
+When an adjacent skill contributes only evidence, planning, or transport, keep
+it secondary and leave final-deliverable ownership with the primary skill.
+
 ### Orchestration
 
 Use only when the coordination logic is the actual product.

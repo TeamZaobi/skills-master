@@ -17,6 +17,7 @@ Usage:
     link_skill.py <skill-path>                        # Link to default user-level targets
     link_skill.py <skill-path> --project-root <path> # Link into project tool dirs
     link_skill.py <skill-path> --targets claude,codex,antigravity # Link to specific targets
+    link_skill.py <skill-path> --targets kimi          # Opt-in Kimi Code directory
     link_skill.py <skill-path> --status               # Show link status
     link_skill.py <skill-path> --unlink               # Remove all links
     link_skill.py <skill-path> --unlink --targets codex  # Remove specific links
@@ -72,6 +73,17 @@ LINK_TARGETS = {
         ],
         "project": [
             {"label": "antigravity", "path": ".agents/skills", "link_allowed": False},
+        ],
+    },
+    # Kimi Code discovers .agents/skills natively (already covered by the
+    # codex target), so this target only adds the Kimi-specific directory.
+    # It is never a default: request it explicitly with --targets kimi.
+    "kimi": {
+        "user": [
+            {"label": "kimi", "path": ".kimi-code/skills", "link_allowed": True},
+        ],
+        "project": [
+            {"label": "kimi", "path": ".kimi-code/skills", "link_allowed": True},
         ],
     },
 }
@@ -430,7 +442,7 @@ Examples:
     parser.add_argument("skill_path", nargs="?", help="Path to the skill directory")
     parser.add_argument(
         "--targets",
-        help="Comma-separated tool names (default: claude,codex,antigravity for user scope; claude,codex for project scope)",
+        help="Comma-separated tool names (default: claude,codex,antigravity for user scope; claude,codex for project scope; kimi is opt-in only)",
     )
     parser.add_argument(
         "--project-root",

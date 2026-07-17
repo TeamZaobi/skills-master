@@ -9,8 +9,14 @@ Keep one canonical owner for the external capability while making each host cons
 Select the canonical location with
 [`layout-contract.md`](layout-contract.md) before creating projections. A
 repository-owned distributable skill uses `skills/<name>`; project host paths
-remain direct read-only projections. `.agents/skills` may serve both Codex and
-Gemini/Antigravity when the project hosts support that shared discovery path.
+remain direct read-only projections. `.agents/skills` may serve Codex,
+Gemini/Antigravity, and Kimi Code when the project hosts support that shared
+discovery path. Kimi Code additionally reads project `.kimi-code/skills` and
+user `~/.kimi-code/skills`; both stay opt-in projections, and
+`.kimi-code/skills` wins when one name is visible in both project directories.
+Kimi ignores unknown frontmatter fields, so Claude- or Codex-specific keys do
+not break loading; its own keys are `whenToUse`, `disableModelInvocation`,
+`type`, and `arguments`.
 
 The adaptation should answer:
 
@@ -27,6 +33,14 @@ Before adapting a tool, run a small intake pass instead of starting from install
 2. Check the local installed instance or project-local workflow if one already exists.
 3. Check mature community practice and known anti-patterns when the tool ecosystem is active.
 4. Separate official mechanism, live instance, community experience, and current inference.
+
+### Method Skills
+
+Treat external TDD / BDD skills as method capabilities, not global entry
+owners. Keep `Gherkin` / `Given-When-Then` as a thin semantic-alignment trigger;
+it does not transfer lifecycle, project-truth, or implementation ownership to
+the method skill. Apply the intake pass above and the verification ladder below
+before widening its discovery surface.
 
 If the tool changes project truth, write boundaries, process state, recovery, or audit, hand the governance decision to `files-driven` before treating the adapter as accepted.
 

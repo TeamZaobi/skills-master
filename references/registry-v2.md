@@ -56,6 +56,28 @@ targets = ["agents", "claude"]
 Generated products additionally require `build_command`, `output_dir`, and
 `reproducibility_check` on the skill entry.
 
+## Host Coverage
+
+Kimi Code natively discovers project skills from `.agents/skills`, so the
+shared `agents` projection already serves it; add `"kimi"` to that
+projection's `hosts` when the repository officially supports Kimi Code.
+
+Declare a separate opt-in projection only for Kimi-only skills or
+Kimi-specific variants:
+
+```toml
+[[projection]]
+id = "kimi"
+path = ".kimi-code/skills"
+hosts = ["kimi"]
+required = false
+```
+
+When one name is visible from both project discovery directories, Kimi Code
+loads it from `.kimi-code/skills` first. The doctor reports
+`projection_kimi_shadow` when the two copies resolve to different realpaths,
+because the hosts would otherwise see different content.
+
 ## Migration From v1
 
 1. Classify each registered skill using the layout contract.
