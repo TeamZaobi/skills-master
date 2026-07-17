@@ -36,6 +36,19 @@ source_url = "https://github.com/Leonxlnx/taste-skill.git"
 pinned_commit = "c8075169cd63d1430bbf492dd4ddd478ea9fa4da"
 
 [[content_source_contract]]
+id = "taste-skill-declared-local-fork-v1"
+path = "~/.agents/skill-sources/taste-skill-local-fork"
+class = "declared_local_fork_checkout"
+mutation_owner = "local_fork_owner"
+local_rewrite = "allowed_after_evidence"
+source_url = "https://github.com/Leonxlnx/taste-skill.git"
+pinned_commit = "b323d641f4634000769fce8cfcc635529284e75c"
+upstream_base_commit = "c8075169cd63d1430bbf492dd4ddd478ea9fa4da"
+branch = "local/fleet-progressive-disclosure"
+skills = ["brandkit", "image-to-code", "imagegen-frontend-mobile", "imagegen-frontend-web"]
+push_remote = ""
+
+[[content_source_contract]]
 id = "ui-ux-pro-max-upstream-checkout-v1"
 path = "~/.agents/skill-sources/ui-ux-pro-max-skill"
 class = "upstream_source_checkout"
