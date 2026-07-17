@@ -32,11 +32,15 @@ python3 scripts/link_skill.py /path/to/repo/skills/my-skill --project-root /path
 
 # Package after validation.
 python3 -m scripts.package_skill /path/to/repo/skills/my-skill ./dist
+
+# Scan a fleet read-only and preserve decisions from the prior ledger.
+python3 scripts/fleet_scan.py --output-dir /path/to/run/fleet \
+  --previous-ledger /path/to/prior/finding-ledger.v1.json
 ```
 
 ## Repository Map
 
-- `scripts/`: initialization, validation, linking, packaging, evaluation, and doctor tooling
+- `scripts/`: initialization, validation, linking, packaging, evaluation, fleet scanning, and doctor tooling
 - `references/`: layout, host, workflow, schema, and boundary contracts
 - `evals/`: trigger and ownership boundary cases
 - `agents/`: optional comparison, grading, and analysis roles

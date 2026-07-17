@@ -77,6 +77,9 @@ inside the intended boundary.
 
 - Existing-asset maintenance and upstream convergence:
   [`references/workflows.md`](references/workflows.md)
+- Fleet-wide inventory, owner/disposition tracking, and cleanup waves:
+  [`references/fleet-policy.v1.toml`](references/fleet-policy.v1.toml) with
+  `scripts/fleet_scan.py`
 - Skill/agent content placement:
   [`references/structure-boundaries.md`](references/structure-boundaries.md)
 - Multi-skill ownership and handoff:

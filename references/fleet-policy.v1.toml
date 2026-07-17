@@ -1,0 +1,83 @@
+version = 1
+owner = "skills-master"
+
+[scope]
+user_roots = ["~/.agents/skills", "~/.claude/skills", "~/.kimi-code/skills", "~/.codex/skills", "~/.gemini/skills", "~/.gemini/antigravity/skills"]
+user_labels = ["user_agents", "user_claude", "user_kimi", "user_codex", "user_gemini", "user_antigravity"]
+user_roles = ["user_canonical", "user_projection", "user_projection", "user_compat", "user_projection", "user_projection"]
+system_roots = ["~/.codex/skills/.system"]
+plugin_roots = ["~/.codex/plugins/cache"]
+project_root = "~/Agents"
+project_max_depth = 2
+include_skills_master_repo = true
+project_skill_roots = [".agents/skills", ".claude/skills", ".kimi-code/skills", ".codex/skills", "skills"]
+
+[classification]
+user_agents = "user_native_or_user_projection_source"
+user_codex = "mixed_compatibility_surface"
+user_codex_system = "host_managed_system"
+project_codex = "legacy_compatibility_surface"
+plugin_cache = "host_managed_plugin_cache"
+cross_project_same_name = "legal_unless_shared_host_scope_or_declared_consumer_conflicts"
+historical_default = "classify_before_excluding_or_deleting"
+
+[guardrails]
+read_only = true
+follow_symlinks_for_writes = false
+delete_assets = false
+migrate_assets = false
+adopt_candidates = false
+global_name_uniqueness_required = false
+one_editable_source_per_owner_scope = true
+projection_must_be_one_hop = true
+
+[historical]
+exclude_path_fragments = ["/docs/dev-records/", "/evidence/", "/archive/", "/outputs/", "/snapshots/", "/node_modules/", "/.git/"]
+candidate_name_markers = ["backup", "副本", ".wt-"]
+
+[[hosts]]
+name = "codex"
+user_roots = ["user_agents", "user_codex"]
+project_roots = ["project_agents", "project_codex"]
+resolution = "parallel_or_host_defined"
+
+[[hosts]]
+name = "claude"
+user_roots = ["user_claude"]
+project_roots = ["project_claude"]
+resolution = "single"
+
+[[hosts]]
+name = "kimi"
+user_roots = ["user_kimi", "user_agents"]
+project_roots = ["project_kimi", "project_agents"]
+resolution = "ordered_precedence"
+
+[[hosts]]
+name = "gemini"
+user_roots = ["user_gemini", "user_agents"]
+project_roots = ["project_agents"]
+resolution = "parallel_or_host_defined"
+
+[[hosts]]
+name = "antigravity"
+user_roots = ["user_antigravity", "user_gemini", "user_agents"]
+project_roots = ["project_agents"]
+resolution = "parallel_or_host_defined"
+
+[severity]
+dangling_projection = "error"
+projection_chain = "error"
+projection_target_without_skill = "error"
+parallel_host_collision = "error"
+ordered_host_shadow = "warning"
+real_directory_in_projection_surface = "warning"
+package_in_discovery_surface = "warning"
+non_skill_file_in_discovery_surface = "warning"
+collection_root_in_discovery_surface = "warning"
+non_skill_directory_in_discovery_surface = "warning"
+legacy_project_codex_surface = "warning"
+frontmatter_invalid_or_mismatched = "warning"
+unregistered_or_legacy_source = "warning"
+host_managed_asset = "info"
+legal_cross_project_same_name = "info"

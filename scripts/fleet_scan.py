@@ -1,0 +1,523 @@
+#!/usr/bin/env python3
+"""Scope-aware, read-only inventory for a local Skills fleet.
+
+The scanner reads Skill assets and writes only versioned inventory, ledger, and
+summary receipts below an explicit output directory. It never relinks,
+migrates, packages, adopts, or deletes a Skill asset.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import sys
+from collections import Counter, defaultdict
+from datetime import datetime, timezone
+from pathlib import Path
+
+SKILLS_MASTER_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(SKILLS_MASTER_ROOT))
+from scripts.toml_compat import load_toml  # noqa: E402
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Scan a local Skills fleet without mutating it")
+    parser.add_argument(
+        "--policy",
+        default=str(SKILLS_MASTER_ROOT / "references" / "fleet-policy.v1.toml"),
+        help="Fleet policy TOML path",
+    )
+    parser.add_argument("--output-dir", required=True, help="Directory for generated receipts")
+    parser.add_argument(
+        "--previous-ledger",
+        help="Optional previous ledger whose owner, status, and disposition are carried by fingerprint",
+    )
+    parser.add_argument("--no-write", action="store_true", help="Print summary without writing receipts")
+    return parser.parse_args()
+
+
+ARGS = parse_args()
+POLICY_PATH = Path(ARGS.policy).expanduser().resolve()
+OUT = Path(ARGS.output_dir).expanduser().resolve()
+
+
+def load_policy() -> dict:
+    return load_toml(POLICY_PATH)
+
+
+POLICY = load_policy()
+EXCLUDED = tuple(POLICY["historical"]["exclude_path_fragments"])
+NAME_MARKERS = tuple(POLICY["historical"]["candidate_name_markers"])
+
+
+def sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def finding_fingerprint(item: dict) -> str:
+    payload = {
+        "severity": item["severity"],
+        "category": item["category"],
+        "title": item["title"],
+        "paths": sorted(item.get("paths", [])),
+        "detail": item.get("detail", ""),
+        "scope": item.get("scope", ""),
+    }
+    rendered = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(rendered.encode("utf-8")).hexdigest()
+
+
+def frontmatter(path: Path) -> dict:
+    result = {"parseable": False, "name": None, "description": None}
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        return result
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return result
+    try:
+        end = next(i for i, line in enumerate(lines[1:200], 1) if line.strip() == "---")
+    except StopIteration:
+        return result
+    result["parseable"] = True
+    for line in lines[1:end]:
+        match = re.match(r"^([A-Za-z0-9_-]+):\s*(.*)$", line)
+        if not match:
+            continue
+        key, value = match.groups()
+        value = value.strip().strip('"').strip("'")
+        if key in {"name", "description"}:
+            result[key] = value
+    return result
+
+
+def is_excluded(path: Path) -> bool:
+    rendered = str(path)
+    return any(fragment in rendered for fragment in EXCLUDED)
+
+
+def candidate_historical(path: Path) -> bool:
+    lowered = path.name.lower()
+    return any(marker.lower() in lowered for marker in NAME_MARKERS)
+
+
+def repo_roots(root: Path, max_depth: int) -> list[Path]:
+    found: set[Path] = set()
+    if not root.is_dir():
+        return []
+    for first in root.iterdir():
+        if not first.is_dir():
+            continue
+        if (first / ".git").exists():
+            found.add(first)
+        if max_depth >= 2:
+            try:
+                children = list(first.iterdir())
+            except OSError:
+                continue
+            for second in children:
+                if second.is_dir() and (second / ".git").exists():
+                    found.add(second)
+    return sorted(found)
+
+
+assets: list[dict] = []
+asset_keys: set[tuple] = set()
+findings: list[dict] = []
+registries: list[dict] = []
+
+
+def add_finding(severity: str, category: str, title: str, paths: list[str], detail: str = "", scope: str = "") -> None:
+    findings.append({
+        "severity": severity,
+        "category": category,
+        "title": title,
+        "paths": paths,
+        "detail": detail,
+        "scope": scope,
+    })
+
+
+def add_asset(entry: Path, *, label: str, role: str, scope: str, repo: str = "", declared: str = "") -> None:
+    key = (str(entry), label, role, scope, repo)
+    if key in asset_keys:
+        return
+    asset_keys.add(key)
+    raw_target = ""
+    target_abs = ""
+    dangling = False
+    target_is_symlink = False
+    entry_type = "other"
+    if entry.is_symlink():
+        entry_type = "symlink"
+        try:
+            raw_target = os.readlink(entry)
+            target_abs = raw_target if os.path.isabs(raw_target) else os.path.normpath(str(entry.parent / raw_target))
+            dangling = not entry.exists()
+            target_is_symlink = Path(target_abs).is_symlink()
+        except OSError:
+            dangling = True
+    elif entry.is_dir():
+        entry_type = "real_dir"
+    elif entry.is_file():
+        entry_type = "file"
+    realpath = str(entry.resolve(strict=False))
+    skill_path = Path(realpath) / "SKILL.md"
+    skill_exists = skill_path.is_file()
+    fm = frontmatter(skill_path) if skill_exists else {"parseable": False, "name": None, "description": None}
+    name = fm.get("name") or entry.name
+    asset = {
+        "asset_id": hashlib.sha256("|".join(map(str, key)).encode()).hexdigest()[:16],
+        "name": name,
+        "entry_name": entry.name,
+        "entry_path": str(entry),
+        "entry_type": entry_type,
+        "raw_target": raw_target,
+        "target_abs": target_abs,
+        "target_is_symlink": target_is_symlink,
+        "dangling": dangling,
+        "realpath": realpath,
+        "scope": scope,
+        "repo": repo,
+        "discovery_label": label,
+        "role": role,
+        "declared": declared,
+        "candidate_historical": candidate_historical(Path(repo)) if repo else candidate_historical(entry),
+        "skill_md": str(skill_path) if skill_exists else "",
+        "skill_sha256": sha256(skill_path) if skill_exists else "",
+        "frontmatter": fm,
+    }
+    assets.append(asset)
+    finding_scope = repo or scope
+
+    if entry_type == "symlink" and dangling:
+        add_finding("error", "dangling_projection", f"Dangling projection: {entry}", [str(entry)], f"target={raw_target}", finding_scope)
+    elif entry_type == "symlink" and target_is_symlink:
+        add_finding("error", "projection_chain", f"Projection targets another symlink: {entry}", [str(entry), target_abs], "Projection must point directly to a canonical directory.", finding_scope)
+    if entry_type == "symlink" and not dangling and not skill_exists:
+        add_finding("error", "projection_target_without_skill", f"Projection target has no SKILL.md: {entry}", [str(entry), realpath], "", finding_scope)
+    if entry_type == "file" and role not in {"plugin_cache", "system_managed"}:
+        package_suffixes = {".zip", ".tar", ".tgz", ".gz", ".bz2", ".xz"}
+        category = "package_in_discovery_surface" if entry.suffix.lower() in package_suffixes else "non_skill_file_in_discovery_surface"
+        add_finding("warning", category, f"File in Skill discovery surface: {entry}", [str(entry)], role, finding_scope)
+    if entry_type == "real_dir" and not skill_exists and role not in {"plugin_cache", "system_managed"}:
+        try:
+            contains_skills = any(entry.rglob("SKILL.md"))
+        except OSError:
+            contains_skills = False
+        category = "collection_root_in_discovery_surface" if contains_skills else "non_skill_directory_in_discovery_surface"
+        add_finding("warning", category, f"Directory in Skill discovery surface has no root SKILL.md: {entry}", [str(entry)], role, finding_scope)
+    if role in {"user_projection", "user_compat", "project_projection", "project_compat"} and entry_type == "real_dir" and skill_exists:
+        add_finding("warning", "real_directory_in_projection_surface", f"Editable-looking directory in projection surface: {entry}", [str(entry)], role, finding_scope)
+    if role == "project_compat":
+        add_finding("warning", "legacy_project_codex_surface", f"Project .codex/skills compatibility entry: {entry}", [str(entry)], "Classify before retirement; do not delete by directory-wide rule.", finding_scope)
+    if skill_exists and not fm.get("parseable"):
+        add_finding("warning", "frontmatter_invalid", f"Unparseable frontmatter: {skill_path}", [str(skill_path)], "", finding_scope)
+    elif skill_exists and not fm.get("name"):
+        add_finding("warning", "frontmatter_missing_name", f"Missing frontmatter name: {skill_path}", [str(skill_path)], "", finding_scope)
+    elif skill_exists and role not in {"plugin_cache", "system_managed"} and fm.get("name") != entry.name:
+        add_finding("warning", "frontmatter_name_mismatch", f"Directory/name mismatch: {entry}", [str(entry)], f"frontmatter={fm.get('name')}", finding_scope)
+
+
+user_roots = POLICY["scope"]["user_roots"]
+user_labels = POLICY["scope"]["user_labels"]
+user_roles = POLICY["scope"]["user_roles"]
+if not (len(user_roots) == len(user_labels) == len(user_roles)):
+    raise ValueError("scope.user_roots, user_labels, and user_roles must have equal length")
+
+for raw_root, label, role in zip(user_roots, user_labels, user_roles):
+    root = Path(raw_root).expanduser()
+    if not root.is_dir():
+        continue
+    try:
+        children = sorted(root.iterdir())
+    except OSError:
+        continue
+    for child in children:
+        if raw_root.endswith("/.codex/skills") and child.name == ".system":
+            continue
+        if child.name.startswith(".") or child.name in {"Icon", "Icon\r"}:
+            continue
+        add_asset(child, label=label, role=role, scope="user")
+
+
+for raw_root in POLICY["scope"]["system_roots"]:
+    root = Path(raw_root).expanduser()
+    if not root.is_dir():
+        continue
+    for child in sorted(root.iterdir()):
+        if child.is_dir() or child.is_symlink():
+            add_asset(child, label="codex_system", role="system_managed", scope="system")
+            if (child.resolve(strict=False) / "SKILL.md").is_file():
+                add_finding("info", "host_managed_asset", f"Host-managed system Skill: {child.name}", [str(child)], "Excluded from user cleanup.", "system")
+
+
+for raw_root in POLICY["scope"]["plugin_roots"]:
+    root = Path(raw_root).expanduser()
+    if not root.is_dir():
+        continue
+    for skill_md in root.rglob("SKILL.md"):
+        if is_excluded(skill_md):
+            continue
+        add_asset(skill_md.parent, label="codex_plugin_cache", role="plugin_cache", scope="plugin")
+
+
+def load_registry(repo: Path) -> dict:
+    path = repo / "skills" / "registry.toml"
+    if not path.is_file():
+        return {}
+    try:
+        data = load_toml(path)
+    except Exception as exc:  # noqa: BLE001
+        add_finding("warning", "registry_parse_error", f"Cannot parse registry: {path}", [str(path)], str(exc), str(repo))
+        return {}
+    record = {
+        "repo": str(repo),
+        "path": str(path),
+        "version": data.get("version"),
+        "layout": data.get("layout"),
+        "canonical_dir": data.get("canonical_dir"),
+        "owned": [item.get("name") for item in data.get("skill", [])],
+        "consumers": [item.get("name") for item in data.get("consumer_skill", [])],
+    }
+    registries.append(record)
+    return data
+
+
+repos = repo_roots(Path(POLICY["scope"]["project_root"]).expanduser(), int(POLICY["scope"]["project_max_depth"]))
+skills_master = SKILLS_MASTER_ROOT
+if POLICY["scope"].get("include_skills_master_repo", True) and (skills_master / ".git").exists():
+    repos.append(skills_master)
+repos = sorted(set(repos))
+
+PROJECT_LABELS = {
+    ".agents/skills": ("project_agents", "project_native_or_projection"),
+    ".claude/skills": ("project_claude", "project_projection"),
+    ".kimi-code/skills": ("project_kimi", "project_projection"),
+    ".codex/skills": ("project_codex", "project_compat"),
+}
+
+
+for repo in repos:
+    registry = load_registry(repo)
+    declared_owned = {item.get("source", ""): item.get("name", "") for item in registry.get("skill", [])}
+    declared_consumers = {item.get("name", "") for item in registry.get("consumer_skill", [])}
+    for rel, (label, role) in PROJECT_LABELS.items():
+        root = repo / rel
+        if not root.is_dir():
+            continue
+        try:
+            children = sorted(root.iterdir())
+        except OSError:
+            continue
+        for child in children:
+            if child.name in {".DS_Store", "Icon", "Icon\r"}:
+                continue
+            declared = "consumer" if child.name in declared_consumers else ""
+            add_asset(child, label=label, role=role, scope="project", repo=str(repo), declared=declared)
+
+    skills_root = repo / "skills"
+    if skills_root.is_dir():
+        for skill_md in skills_root.rglob("SKILL.md"):
+            if is_excluded(skill_md):
+                continue
+            parent = skill_md.parent
+            rel = str(parent.relative_to(repo))
+            if "/dist/" in f"/{rel}/" or rel.startswith("skills/dist/"):
+                role = "generated_output"
+            elif "/src/" in f"/{rel}/" or rel.startswith("skills/src/"):
+                role = "legacy_or_generated_source"
+            else:
+                role = "repo_source"
+            declared = "owned" if rel in declared_owned else ""
+            add_asset(parent, label="project_skills_source", role=role, scope="project", repo=str(repo), declared=declared)
+            if role == "legacy_or_generated_source" and not declared:
+                add_finding("warning", "unregistered_or_legacy_source", f"Unregistered or legacy skills/src source: {parent}", [str(parent)], "A src name alone is not a build contract.", str(repo))
+
+
+def host_conflicts(scope: str, repo: str = "") -> None:
+    subset = [a for a in assets if a["scope"] == scope and a["skill_md"] and not a["dangling"]]
+    if repo:
+        subset = [a for a in subset if a["repo"] == repo]
+    for host in POLICY["hosts"]:
+        labels = set(host["user_roots"] if scope == "user" else host["project_roots"])
+        candidates = [a for a in subset if a["discovery_label"] in labels]
+        grouped: dict[str, list[dict]] = defaultdict(list)
+        for asset in candidates:
+            # Host discovery competes on the exposed directory slot. Frontmatter
+            # mismatch is a separate finding and must not hide a slot collision.
+            grouped[asset["entry_name"]].append(asset)
+        for name, occurrences in grouped.items():
+            realpaths = sorted({a["realpath"] for a in occurrences})
+            if len(realpaths) <= 1:
+                continue
+            paths = sorted({a["entry_path"] for a in occurrences})
+            if host["resolution"] == "ordered_precedence":
+                add_finding("warning", "ordered_host_shadow", f"{host['name']} precedence shadows divergent '{name}'", paths, "; ".join(realpaths), repo or scope)
+            else:
+                add_finding("error", "parallel_host_collision", f"{host['name']} sees divergent '{name}' in one scope", paths, "; ".join(realpaths), repo or scope)
+
+
+host_conflicts("user")
+for repo in repos:
+    host_conflicts("project", str(repo))
+
+
+project_sources: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
+for asset in assets:
+    if asset["scope"] == "project" and asset["role"] in {"repo_source", "legacy_or_generated_source", "project_native_or_projection"} and asset["skill_md"]:
+        project_sources[asset["name"]][asset["repo"]].add(asset["realpath"])
+for name, by_repo in sorted(project_sources.items()):
+    if len(by_repo) > 1:
+        add_finding(
+            "info",
+            "legal_cross_project_same_name",
+            f"Same name across independent project scopes: {name}",
+            sorted(by_repo),
+            "Not an error unless the assets enter the same host discovery scope or violate a declared consumer relationship.",
+            "cross_project",
+        )
+
+
+for repo in repos:
+    if candidate_historical(repo):
+        add_finding("warning", "candidate_historical_repo", f"Repository needs historical/active classification: {repo}", [str(repo)], "Do not silently exclude or delete.", str(repo))
+
+
+# One physical defect may be observed through several projections. Preserve
+# occurrence-level inventory, but collapse byte-identical findings in the ledger.
+deduplicated: dict[tuple, dict] = {}
+for finding in findings:
+    key = (
+        finding["severity"],
+        finding["category"],
+        finding["title"],
+        tuple(finding["paths"]),
+        finding["detail"],
+        finding["scope"],
+    )
+    deduplicated[key] = finding
+findings = list(deduplicated.values())
+
+
+severity_counts = Counter(item["severity"] for item in findings)
+category_counts = Counter(item["category"] for item in findings)
+scope_counts = Counter(item["scope"] for item in assets)
+role_counts = Counter(item["role"] for item in assets)
+runtime_error_categories = {"dangling_projection", "projection_chain", "projection_target_without_skill", "parallel_host_collision"}
+runtime_errors = sum(1 for item in findings if item["severity"] == "error" and item["category"] in runtime_error_categories)
+inventory_open = sum(1 for item in findings if item["severity"] in {"error", "warning"})
+summary = {
+    "generated_at": datetime.now(timezone.utc).isoformat(),
+    "policy": str(POLICY_PATH),
+    "read_only": True,
+    "repos_scanned": len(repos),
+    "registries_found": len(registries),
+    "assets": len(assets),
+    "unique_names": len({a["name"] for a in assets if a["skill_md"]}),
+    "unique_realpaths": len({a["realpath"] for a in assets if a["skill_md"]}),
+    "scope_counts": dict(sorted(scope_counts.items())),
+    "role_counts": dict(sorted(role_counts.items())),
+    "severity_counts": {key: severity_counts.get(key, 0) for key in ("error", "warning", "info")},
+    "category_counts": dict(sorted(category_counts.items())),
+    "four_clean": {
+        "registry_clean": {"status": "not_fleetwide_proven", "registries_found": len(registries)},
+        "runtime_discovery_clean": {"status": "clean" if runtime_errors == 0 else "not_clean", "open_errors": runtime_errors},
+        "inventory_clean": {"status": "clean" if inventory_open == 0 else "not_clean", "open_error_or_warning": inventory_open},
+        "content_predictability_clean": {"status": "not_fleetwide_assessed"},
+    },
+}
+
+
+def default_owner(item: dict) -> str:
+    scope = item.get("scope", "")
+    if scope == "user":
+        return "user"
+    if scope == "system":
+        return "host:codex"
+    if scope == "plugin":
+        return "host:plugin-updater"
+    if scope == "cross_project":
+        return "project-owners"
+    if scope.startswith("/"):
+        return f"repo:{scope}"
+    return "unassigned"
+
+
+RECOMMENDED_ACTIONS = {
+    "dangling_projection": "confirm the intended consumer, then relink directly to the canonical source or retire the slot",
+    "projection_chain": "replace the chain with a direct one-hop projection to the canonical source",
+    "projection_target_without_skill": "map the exposed slot to a concrete Skill/router or retire the invalid slot",
+    "parallel_host_collision": "select one canonical realpath for the host scope and remove the competing discovery path",
+    "ordered_host_shadow": "make host precedence intentional and ensure every duplicate resolves to the same canonical realpath",
+    "candidate_historical_repo": "classify active, immutable historical, recovery backup, or removable before exclusion",
+    "legacy_project_codex_surface": "prove primary discovery in a fresh session, then declare or retire the compatibility entry",
+    "real_directory_in_projection_surface": "reconcile edits into the canonical source, then replace the directory with a direct projection",
+    "frontmatter_invalid": "repair the canonical source; for plugin/system assets, report to the updater instead of editing cache",
+    "frontmatter_missing_name": "add the canonical name at the editable source and rerun discovery validation",
+    "frontmatter_name_mismatch": "decide whether the host slot or frontmatter name is authoritative, then align at the canonical source",
+    "unregistered_or_legacy_source": "classify the asset shape and register or migrate the active source",
+    "collection_root_in_discovery_surface": "expose concrete child Skills or create an explicit router; do not expose a collection root as a Skill",
+    "non_skill_directory_in_discovery_surface": "classify the directory and move or remove it from the discovery surface",
+    "package_in_discovery_surface": "archive the package outside discovery after recording digest and provenance",
+    "non_skill_file_in_discovery_surface": "move documentation or metadata outside the Skill slot after preserving provenance",
+    "host_managed_asset": "keep read-only and let the host updater own changes",
+    "legal_cross_project_same_name": "retain as legal scoped duplication unless a shared host or declared consumer creates a collision",
+}
+
+
+def default_disposition(item: dict) -> str:
+    category = item["category"]
+    if category == "host_managed_asset":
+        return "read_only_host_managed"
+    if category == "legal_cross_project_same_name":
+        return "allowed_scoped_duplicate"
+    return "unresolved"
+
+
+ledger = []
+previous_by_fingerprint: dict[str, dict] = {}
+if ARGS.previous_ledger:
+    previous_path = Path(ARGS.previous_ledger).expanduser().resolve()
+    try:
+        previous_payload = json.loads(previous_path.read_text(encoding="utf-8"))
+        for previous in previous_payload.get("findings", []):
+            fingerprint = previous.get("fingerprint") or finding_fingerprint(previous)
+            previous_by_fingerprint[fingerprint] = previous
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        print(f"warning: cannot load previous ledger {previous_path}: {exc}", file=sys.stderr)
+
+for item in sorted(findings, key=lambda x: ({"error": 0, "warning": 1, "info": 2}[x["severity"]], x["category"], x["title"])):
+    fingerprint = finding_fingerprint(item)
+    previous = previous_by_fingerprint.get(fingerprint, {})
+    owner = previous.get("owner")
+    if not owner or owner == "unassigned":
+        owner = default_owner(item)
+    disposition = previous.get("disposition")
+    if not disposition or disposition == "none_during_research":
+        disposition = default_disposition(item)
+    ledger.append({
+        "finding_id": f"F-{fingerprint[:8].upper()}",
+        "fingerprint": fingerprint,
+        **item,
+        "status": previous.get("status", "observed" if item["severity"] == "info" else "open"),
+        "owner": owner,
+        "disposition": disposition,
+        "recommended_action": RECOMMENDED_ACTIONS.get(item["category"], "review and choose a bounded disposition"),
+        "rollback_requirement": "record original path, link target, digest, and owner-approved restore action before mutation",
+        "requires_fresh_proof": item["severity"] != "info",
+    })
+
+if not ARGS.no_write:
+    OUT.mkdir(parents=True, exist_ok=True)
+    (OUT / "inventory.v1.json").write_text(json.dumps({"summary": summary, "registries": registries, "assets": assets}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    (OUT / "finding-ledger.v1.json").write_text(json.dumps({"summary": summary, "findings": ledger}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    (OUT / "summary.v1.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+print(json.dumps(summary, ensure_ascii=False, indent=2))
