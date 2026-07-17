@@ -36,6 +36,15 @@ source_url = "https://github.com/Leonxlnx/taste-skill.git"
 pinned_commit = "c8075169cd63d1430bbf492dd4ddd478ea9fa4da"
 
 [[content_source_contract]]
+id = "ui-ux-pro-max-upstream-checkout-v1"
+path = "~/.agents/skill-sources/ui-ux-pro-max-skill"
+class = "upstream_source_checkout"
+mutation_owner = "upstream_or_fork"
+local_rewrite = "prohibited_without_fork"
+source_url = "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.git"
+pinned_commit = "f8ac5e1266dba8354ea96e19994d9f4345e7ec31"
+
+[[content_source_contract]]
 id = "blackfactory-installer-sidecars-v1"
 path = "~/Agents/BlackFactory/.agents/skills"
 class = "upstream_install_lock"
