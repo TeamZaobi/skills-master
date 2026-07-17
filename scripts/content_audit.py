@@ -17,7 +17,13 @@ from scripts.toml_compat import load_toml
 
 
 TRIGGER_PATTERN = re.compile(r"\buse when\b|\bwhen\b|\bmentions?\b|用于|当用户|当任务|适用于|提到", re.I)
-STEP_PATTERN = re.compile(r"^#{2,4}\s+(?:step\s*)?\d+[\s.:、]", re.I | re.M)
+HEADING_PATTERN = re.compile(r"^(#{2,4})\s+(.+?)\s*$")
+EXPLICIT_STEP_HEADING = re.compile(r"^(?:step|phase|stage|步骤|阶段)\s*\d+[\s.:、-]", re.I)
+NUMERIC_HEADING = re.compile(r"^\d+[\s.:、-]")
+PROCEDURE_PARENT = re.compile(
+    r"workflow|procedure|process|execution|implementation|工作流|流程|步骤|执行|实施",
+    re.I,
+)
 COMPLETION_PATTERN = re.compile(
     r"completion criterion|done when|acceptance|exit criterion|完成标准|完成条件|验收|退出条件",
     re.I,
@@ -162,6 +168,37 @@ def markdown_targets_outside_fences(text: str) -> list[tuple[str, str]]:
     return results
 
 
+def procedural_step_count(text: str) -> int:
+    """Count headings that are actually presented as ordered procedure steps.
+
+    Plain numbered document sections such as ``## 1. Scope`` and
+    ``## 2. Examples`` are information architecture, not proof that the Skill
+    exposes a multi-step workflow.  Count explicit Step/Phase headings, plus
+    numeric child headings under a workflow/procedure parent.
+    """
+    parents: dict[int, str] = {}
+    count = 0
+    in_fence = False
+    for line in text.splitlines():
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        match = HEADING_PATTERN.match(line)
+        if not match:
+            continue
+        level = len(match.group(1))
+        title = match.group(2).strip()
+        parents = {parent_level: value for parent_level, value in parents.items() if parent_level < level}
+        if EXPLICIT_STEP_HEADING.match(title):
+            count += 1
+        elif NUMERIC_HEADING.match(title) and any(PROCEDURE_PARENT.search(value) for value in parents.values()):
+            count += 1
+        parents[level] = title
+    return count
+
+
 def reachable_reference_files(skill_root: Path, skill_text: str, reference_files: list[Path]) -> set[Path]:
     known = {path.resolve(strict=False) for path in reference_files}
     reference_root = skill_root / "references"
@@ -252,7 +289,7 @@ def dimensions_for(
         if candidate is not None and target.split("#", 1)[0].endswith(".md") and not candidate.is_file():
             broken.append(target)
 
-    step_count = len(STEP_PATTERN.findall(text))
+    step_count = procedural_step_count(text)
     completion_count = len(COMPLETION_PATTERN.findall(text))
     negation_count = len(NEGATION_PATTERN.findall(text))
     description = description.strip()

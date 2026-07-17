@@ -112,6 +112,35 @@ codex_native_allowed_frontmatter_keys = ["allowed-tools", "compatibility", "desc
         categories = [item["category"] for item in payload["profiles"][0]["findings"]]
         self.assertNotIn("broken_context_pointer", categories)
 
+    def test_numbered_document_sections_are_not_procedure_steps(self):
+        with (self.skill / "SKILL.md").open("a", encoding="utf-8") as fh:
+            fh.write("\n## 2. Scope\n\nDetails.\n\n## 3. Examples\n\nDetails.\n")
+        payload = self.run_audit()
+        categories = [item["category"] for item in payload["profiles"][0]["findings"]]
+        self.assertNotIn("ordered_steps_without_completion_markers", categories)
+
+    def test_explicit_steps_without_completion_markers_are_reported(self):
+        skill_text = self.skill / "SKILL.md"
+        content = skill_text.read_text(encoding="utf-8").replace(
+            "## 1. Inspect\n\nCompletion criterion: every input is checked.\n",
+            "## Step 1. Inspect\n\nInspect inputs.\n\n## Step 2. Act\n\nPerform the action.\n",
+        )
+        skill_text.write_text(content, encoding="utf-8")
+        payload = self.run_audit()
+        categories = [item["category"] for item in payload["profiles"][0]["findings"]]
+        self.assertIn("ordered_steps_without_completion_markers", categories)
+
+    def test_numbered_steps_under_workflow_without_completion_markers_are_reported(self):
+        skill_text = self.skill / "SKILL.md"
+        content = skill_text.read_text(encoding="utf-8").replace(
+            "## 1. Inspect\n\nCompletion criterion: every input is checked.\n",
+            "## Workflow\n\n### 1. Inspect\n\nInspect inputs.\n\n### 2. Act\n\nPerform the action.\n",
+        )
+        skill_text.write_text(content, encoding="utf-8")
+        payload = self.run_audit()
+        categories = [item["category"] for item in payload["profiles"][0]["findings"]]
+        self.assertIn("ordered_steps_without_completion_markers", categories)
+
     def test_reference_reachable_through_index_is_not_orphaned(self):
         reference_dir = self.skill / "references"
         reference_dir.mkdir()
