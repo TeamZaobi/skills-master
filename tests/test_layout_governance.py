@@ -263,6 +263,50 @@ targets = []
         findings, _ = self.run_doctor()
         self.assertIn("external_dependency_undeclared", {item.code for item in findings})
 
+    def test_declared_project_local_markdown_dependency_is_allowed(self):
+        source = self.root / "skills" / "project-reader"
+        self.write_skill(source, "project-reader")
+        workflow = self.root / "workflows" / "approved.md"
+        workflow.parent.mkdir(parents=True)
+        workflow.write_text("# Approved workflow\n", encoding="utf-8")
+        with (source / "SKILL.md").open("a", encoding="utf-8") as handle:
+            handle.write("\n[Approved workflow](../../workflows/approved.md)\n")
+        self.write_registry(
+            self.repo_registry(
+                """[policy]
+project_local_markdown_allowlist = ["workflows/approved.md"]
+
+[[skill]]
+name = "project-reader"
+source = "skills/project-reader"
+targets = []
+"""
+            )
+        )
+        findings, counts = self.run_doctor()
+        self.assertEqual(counts, {"error": 0, "warning": 0, "info": 0}, findings)
+
+    def test_undeclared_project_local_markdown_dependency_warns(self):
+        source = self.root / "skills" / "project-reader"
+        self.write_skill(source, "project-reader")
+        workflow = self.root / "workflows" / "approved.md"
+        workflow.parent.mkdir(parents=True)
+        workflow.write_text("# Approved workflow\n", encoding="utf-8")
+        with (source / "SKILL.md").open("a", encoding="utf-8") as handle:
+            handle.write("\n[Approved workflow](../../workflows/approved.md)\n")
+        self.write_registry(
+            self.repo_registry(
+                """[[skill]]
+name = "project-reader"
+source = "skills/project-reader"
+targets = []
+"""
+            )
+        )
+        findings, counts = self.run_doctor()
+        self.assertEqual(counts["error"], 0, findings)
+        self.assertIn("package_external_local", {item.code for item in findings})
+
     def test_missing_optional_dependency_is_informational(self):
         source = self.root / "skills" / "portable"
         self.write_skill(source, "portable")

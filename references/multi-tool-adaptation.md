@@ -73,6 +73,12 @@ python3 scripts/link_skill.py --registry skills/registry.toml --all
 python3 scripts/doctor.py <project-root>
 ```
 
+Repository-local Markdown links that leave a Skill package remain warnings by
+default. When such a link is an intentional dependency on a project truth
+source, declare its repository-relative path or glob under
+`policy.project_local_markdown_allowlist` in registry v2. The allowlist does not
+permit missing targets or paths outside the repository.
+
 ### Native Companion Agent
 
 Shape: one directory whose main contract is `AGENT.md`.

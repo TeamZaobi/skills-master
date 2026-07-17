@@ -2,6 +2,7 @@
 """Validate repository-owned skill layout, registry, projections, and paths."""
 
 import argparse
+import fnmatch
 import json
 import os
 import re
@@ -442,11 +443,12 @@ class RepositoryDoctor:
                     if not target.exists():
                         self.error("internal_link_missing", f"Markdown target does not exist: {raw}", markdown)
                     elif source != target and source not in target.parents:
-                        self.warning(
-                            "package_external_local",
-                            f"Markdown link leaves the packaged skill: {raw}",
-                            markdown,
-                        )
+                        if not self._project_local_markdown_allowed(target):
+                            self.warning(
+                                "package_external_local",
+                                f"Markdown link leaves the packaged skill: {raw}",
+                                markdown,
+                            )
                     continue
 
                 dependency = self._dependency_for_path(target)
@@ -462,6 +464,20 @@ class RepositoryDoctor:
                         f"External target resolves through dependency {dependency}",
                         markdown,
                     )
+
+    def _project_local_markdown_allowed(self, target):
+        policy = self.registry.get("policy", {})
+        patterns = policy.get("project_local_markdown_allowlist", []) if isinstance(policy, dict) else []
+        if not isinstance(patterns, list):
+            return False
+        try:
+            relative = target.relative_to(self.root).as_posix()
+        except ValueError:
+            return False
+        return any(
+            isinstance(pattern, str) and fnmatch.fnmatchcase(relative, pattern)
+            for pattern in patterns
+        )
 
     def _dependency_for_path(self, target):
         for dependency_id, dependency in self.dependencies.items():
