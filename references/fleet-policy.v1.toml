@@ -35,6 +35,15 @@ local_rewrite = "prohibited_without_fork"
 source_url = "https://github.com/Leonxlnx/taste-skill.git"
 pinned_commit = "c8075169cd63d1430bbf492dd4ddd478ea9fa4da"
 
+[[content_source_contract]]
+id = "blackfactory-installer-sidecars-v1"
+path = "~/Agents/BlackFactory/.agents/skills"
+class = "upstream_install_lock"
+mutation_owner = "upstream_or_project_installer"
+local_rewrite = "prohibited_without_upstream_or_fork"
+source_url = ""
+pinned_commit = ""
+
 [[frontmatter_contract]]
 id = "hermes-native-v1"
 repo = "~/Agents/hermes-muniu"

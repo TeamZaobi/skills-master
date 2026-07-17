@@ -246,8 +246,13 @@ codex_native_allowed_frontmatter_keys = ["allowed-tools", "compatibility", "desc
         skill_path = checkout / "skills" / "example"
         management = module.source_management_for(
             str(skill_path),
-            {"name": "example"},
-            [{"name": "example", "role": "user_canonical", "entry_type": "symlink"}],
+            {"name": "example", "repo": str(self.root / "project")},
+            [{
+                "name": "example",
+                "role": "project_native_or_projection",
+                "entry_type": "real_dir",
+                "repo": str(self.root / "project"),
+            }],
             {},
             [{
                 "id": "upstream-v1",
