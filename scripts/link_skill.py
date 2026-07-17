@@ -253,16 +253,20 @@ def link_skill_to_entries(skill_path, entries, force=False):
 
         if link_path.is_symlink():
             existing = os.readlink(link_path)
-            existing_resolved = (link_path.parent / existing).resolve()
-            if existing_resolved == skill_path:
+            existing_target = link_path.parent / existing
+            existing_resolved = existing_target.resolve()
+            projection_chain = existing_target.is_symlink()
+            if existing_resolved == skill_path and not projection_chain:
                 print(f"  ✓  {label}: already linked (skipped)")
                 skipped += 1
                 continue
             if force:
                 link_path.unlink()
-                print(f"  ⚡ {label}: overwriting (was → {existing})")
+                reason = "projection chain" if projection_chain else "mismatched target"
+                print(f"  ⚡ {label}: flattening {reason} (was → {existing})")
             else:
-                print(f"  ⚠  {label}: exists but points to {existing} (use --force to overwrite)")
+                reason = "targets another symlink" if projection_chain else f"points to {existing}"
+                print(f"  ⚠  {label}: {reason} (use --force to overwrite)")
                 warnings += 1
                 continue
         elif link_path.exists():

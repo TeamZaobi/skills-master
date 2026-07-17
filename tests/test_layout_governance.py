@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from scripts.doctor import RepositoryDoctor, expected_source, summarize
+from scripts.link_skill import link_skill_to_entries
 
 
 SKILL_BODY = """---
@@ -56,6 +57,25 @@ class LayoutGovernanceTests(unittest.TestCase):
         findings, counts = self.run_doctor()
         self.assertEqual(counts["error"], 1)
         self.assertEqual([item.code for item in findings], ["registry_missing"])
+
+    def test_linker_force_flattens_projection_chain(self):
+        source = self.root / "skills" / "direct"
+        self.write_skill(source, "direct")
+        intermediate_dir = self.root / ".agents" / "skills"
+        intermediate = self.direct_projection(intermediate_dir, "direct", source)
+        target_dir = self.root / ".codex" / "skills"
+        target = self.direct_projection(target_dir, "direct", intermediate)
+
+        created, skipped, warnings = link_skill_to_entries(
+            source,
+            [{"label": "codex-home", "dir": target_dir, "link_allowed": True}],
+            force=True,
+        )
+
+        self.assertEqual((created, skipped, warnings), (1, 0, 0))
+        raw_target = target.parent / os.readlink(target)
+        self.assertFalse(raw_target.is_symlink())
+        self.assertEqual(target.resolve(), source.resolve())
 
     def repo_registry(self, skill_block, dependencies="", extra_projections=""):
         return f"""version = 2
