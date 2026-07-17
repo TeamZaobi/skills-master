@@ -49,6 +49,21 @@ skills = ["brandkit", "image-to-code", "imagegen-frontend-mobile", "imagegen-fro
 push_remote = ""
 
 [[content_source_contract]]
+id = "bilibili-analyzer-declared-local-fork-v1"
+path = "~/.agents/skill-sources/bilibili-analyzer-local-fork"
+class = "declared_local_fork_checkout"
+mutation_owner = "local_fork_owner"
+local_rewrite = "allowed_after_evidence"
+source_url = "https://github.com/aidotnet/moyucode.git"
+source_path = "skills/tools/bilibili-analyzer/SKILL.md"
+pinned_commit = "83b1d8fe9e619af7960c7986d6f3137604049ed5"
+upstream_base_commit = "256f15bc5cb040271156a183ff5c6baaf2d6ac24"
+upstream_folder_hash = "e19e46d94fa49abbc49588bb06ff8123cfa14aef"
+branch = "main"
+skills = ["bilibili-analyzer"]
+push_remote = ""
+
+[[content_source_contract]]
 id = "ui-ux-pro-max-upstream-checkout-v1"
 path = "~/.agents/skill-sources/ui-ux-pro-max-skill"
 class = "upstream_source_checkout"
