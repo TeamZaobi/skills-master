@@ -33,6 +33,12 @@ id = "optional-sibling"
 root_hint = "../OptionalSibling"
 required = false
 role = "integration_only"
+
+[[consumer_skill]]
+name = "external-example"
+dependency = "optional-sibling"
+source = "skills/external-example"
+targets = ["agents", "claude"]
 ```
 
 ## Required Fields
@@ -42,6 +48,10 @@ role = "integration_only"
 - Skill: `name`, `source`; `layout` may override the root layout; `targets`
   defaults to all required projections
 - Dependency: `id`, `root_hint`, `required`, `role`
+- Consumer Skill: `name`, `dependency`, `source`, `targets`. `source` is
+  relative to the dependency root. A consumer entry creates discovery
+  projections only; it is not a fifth canonical asset shape and grants no
+  write authority to the consuming repository.
 
 Generated products additionally require `build_command`, `output_dir`, and
 `reproducibility_check` on the skill entry.
@@ -53,10 +63,12 @@ Generated products additionally require `build_command`, `output_dir`, and
 3. Change every active consumer to the new canonical path.
 4. Replace projection chains with direct links.
 5. Register every external repository dependency.
-6. Run `scripts/doctor.py`; remove the old directory only after it reports no
+6. When a repository consumes an external Skill, register it as
+   `[[consumer_skill]]` and project every host directly to the dependency's
+   canonical source. Do not keep a local editable mirror.
+7. Run `scripts/doctor.py`; remove the old directory only after it reports no
    active canonical or projection dependency on that path.
 
 Historical receipts and immutable snapshots keep their original path text.
 They describe the environment in which they were produced and are not live
 consumers.
-

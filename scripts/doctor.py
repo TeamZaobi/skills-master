@@ -120,6 +120,17 @@ class RepositoryDoctor:
             seen_sources[source] = name
             self._check_skill(skill, source, root_layout)
 
+        for consumer in self.registry.get("consumer_skill", []):
+            name = consumer.get("name")
+            if not name:
+                self.error("consumer_name_missing", "A consumer skill entry has no name")
+                continue
+            if name in seen_names:
+                self.error("consumer_name_duplicate", f"Duplicate owned/consumer skill name: {name}")
+                continue
+            seen_names.add(name)
+            self._check_consumer_skill(consumer)
+
         return self.findings
 
     def _load_projections(self):
@@ -218,6 +229,93 @@ class RepositoryDoctor:
 
         self._check_projections(skill, projection_source, layout)
         self._check_markdown_links(source)
+
+    def _check_consumer_skill(self, consumer):
+        name = consumer["name"]
+        dependency_id = consumer.get("dependency")
+        source_value = consumer.get("source")
+        if not dependency_id or not source_value:
+            self.error(
+                "consumer_contract",
+                f"Consumer skill {name} requires dependency and source",
+            )
+            return
+
+        dependency = self.dependencies.get(dependency_id)
+        if dependency is None:
+            self.error(
+                "consumer_dependency_unknown",
+                f"Consumer skill {name} names unknown dependency {dependency_id}",
+            )
+            return
+
+        relative = Path(source_value)
+        if relative.is_absolute() or ".." in relative.parts:
+            self.error(
+                "consumer_source_unsafe",
+                f"Consumer skill {name} source must stay relative to dependency {dependency_id}",
+                source_value,
+            )
+            return
+
+        for candidate in (self.root / "skills" / name, self.root / "skills" / "src" / name):
+            if candidate.exists() and not candidate.is_symlink():
+                self.error(
+                    "consumer_shadow_copy",
+                    f"Consumer skill {name} has a local editable shadow copy",
+                    candidate,
+                )
+
+        dependency_root = dependency["resolved_root"]
+        source = dependency_root / relative
+        if not dependency_root.exists():
+            self._check_absent_consumer_projections(consumer)
+            if not dependency.get("required", False):
+                self.info(
+                    "consumer_optional_unavailable",
+                    f"Consumer skill {name} stays disabled while dependency {dependency_id} is absent",
+                    dependency_root,
+                )
+            return
+
+        skill_md = source / "SKILL.md"
+        if not source.is_dir() or not skill_md.exists():
+            self.error(
+                "consumer_source_missing",
+                f"Consumer skill {name} source is missing under dependency {dependency_id}",
+                source,
+            )
+            return
+        try:
+            frontmatter, _ = parse_markdown_frontmatter(skill_md)
+        except ValueError as exc:
+            self.error("consumer_frontmatter_invalid", str(exc), skill_md)
+        else:
+            if frontmatter.get("name") != name or source.name != name:
+                self.error(
+                    "consumer_name_mismatch",
+                    f"Consumer registry, directory, and frontmatter names must all equal {name}",
+                    skill_md,
+                )
+
+        self._check_projections(consumer, source, "external_consumer")
+
+    def _check_absent_consumer_projections(self, consumer):
+        for projection_id in consumer.get("targets", []):
+            projection = self.projections.get(projection_id)
+            if projection is None:
+                self.error(
+                    "projection_unknown",
+                    f"Consumer skill {consumer['name']} targets unknown projection {projection_id}",
+                )
+                continue
+            link_path = resolve_from(self.root, projection["path"]) / consumer["name"]
+            if link_path.is_symlink() or link_path.exists():
+                self.error(
+                    "consumer_projection_stale",
+                    f"Consumer skill {consumer['name']} has a projection while its dependency is absent",
+                    link_path,
+                )
 
     def _check_generated_contract(self, skill, source):
         name = skill["name"]

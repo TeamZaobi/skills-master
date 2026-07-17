@@ -144,6 +144,50 @@ def load_registry(registry_path):
     return registry, project_root
 
 
+def registry_dependency_sources(registry, project_root):
+    """Resolve dependency ids to roots for consumer skill entries."""
+    dependencies = {}
+    for item in registry.get("dependency", []):
+        dependency_id = item.get("id")
+        root_hint = item.get("root_hint")
+        if dependency_id and root_hint:
+            dependencies[dependency_id] = {
+                **item,
+                "root": (project_root / root_hint).resolve(),
+            }
+    return dependencies
+
+
+def registry_selected_skills(registry, project_root, selector=None, select_all=False):
+    """Return owned and external-consumer sources selected from registry v2."""
+    selected = []
+    requested_path = Path(selector).expanduser().resolve() if selector and Path(selector).exists() else None
+
+    for item in registry.get("skill", []):
+        source = (project_root / item["source"]).resolve()
+        if select_all or requested_path == source or selector == item.get("name"):
+            layout = item.get("layout", registry.get("layout"))
+            projection_source = (
+                (project_root / item["output_dir"]).resolve()
+                if layout == "generated_product" and item.get("output_dir")
+                else source
+            )
+            selected.append(("owned", item, projection_source, True))
+
+    dependencies = registry_dependency_sources(registry, project_root)
+    for item in registry.get("consumer_skill", []):
+        dependency = dependencies.get(item.get("dependency"))
+        if dependency is None:
+            if select_all or selector == item.get("name"):
+                selected.append(("consumer", item, None, False))
+            continue
+        relative = Path(item.get("source", ""))
+        source = dependency["root"] / relative
+        if select_all or requested_path == source.resolve() or selector == item.get("name"):
+            selected.append(("consumer", item, source.resolve(), dependency["root"].exists()))
+    return selected
+
+
 def registry_projection_entries(registry, project_root, skill_entry):
     """Resolve the projection targets declared for one registry skill."""
     projections = {item.get("id"): item for item in registry.get("projection", [])}
@@ -311,7 +355,7 @@ def status_skill(skill_path, targets=None, project_root=None):
         if project_root is not None
         else "user"
     )
-    print(f"\n📋 Link status for: {skill_name}")
+    print(f"\n📋 Link status for: {skill_path.name}")
     print(f"   Source: {skill_path}")
     print(f"   Scope: {scope_label}\n")
 
@@ -408,23 +452,23 @@ Examples:
         except (OSError, RuntimeError, ValueError) as exc:
             parser.error(str(exc))
 
-        selected = []
-        requested_path = Path(args.skill_path).expanduser().resolve() if args.skill_path else None
-        for item in registry.get("skill", []):
-            source = (registry_root / item["source"]).resolve()
-            if args.all or requested_path == source or args.skill_path == item.get("name"):
-                layout = item.get("layout", registry.get("layout"))
-                projection_source = (
-                    (registry_root / item["output_dir"]).resolve()
-                    if layout == "generated_product" and item.get("output_dir")
-                    else source
-                )
-                selected.append((item, projection_source))
+        selected = registry_selected_skills(
+            registry,
+            registry_root,
+            selector=args.skill_path,
+            select_all=args.all,
+        )
         if not selected:
             parser.error("Select a registered skill by path/name, or pass --all")
 
         totals = [0, 0, 0]
-        for item, source in selected:
+        for kind, item, source, dependency_available in selected:
+            if kind == "consumer" and not dependency_available:
+                print(
+                    f"\n  -  consumer {item['name']}: dependency "
+                    f"{item.get('dependency')} is unavailable; projection stays disabled"
+                )
+                continue
             skill_path = resolve_skill_path(str(source))
             if skill_path is None:
                 totals[2] += 1
@@ -435,7 +479,7 @@ Examples:
                 print(f"  ⚠  {exc}")
                 totals[2] += 1
                 continue
-            print(f"\n🔗 Registry skill: {item['name']}")
+            print(f"\n🔗 Registry {kind} skill: {item['name']}")
             if args.status:
                 status_skill_entries(skill_path, entries)
             elif args.unlink:

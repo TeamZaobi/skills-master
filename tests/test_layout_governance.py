@@ -252,6 +252,81 @@ role = "integration_only"
         self.assertEqual(counts["error"], 0)
         self.assertIn("dependency_optional_missing", {item.code for item in findings})
 
+    def test_external_consumer_projects_directly_to_dependency_source(self):
+        dependency_root = self.root / "external-blackfactory"
+        source = dependency_root / "skills" / "lind"
+        self.write_skill(source, "lind")
+        self.direct_projection(self.root / ".agents" / "skills", "lind", source)
+        self.direct_projection(self.root / ".claude" / "skills", "lind", source)
+        self.write_registry(
+            self.repo_registry(
+                "",
+                """[[dependency]]
+id = "blackfactory"
+root_hint = "external-blackfactory"
+required = false
+role = "product_skill_source"
+
+[[consumer_skill]]
+name = "lind"
+dependency = "blackfactory"
+source = "skills/lind"
+targets = ["agents", "claude"]
+""",
+            )
+        )
+        findings, counts = self.run_doctor()
+        self.assertEqual(counts["error"], 0, findings)
+
+    def test_optional_external_consumer_can_stay_unprojected(self):
+        self.write_registry(
+            self.repo_registry(
+                "",
+                """[[dependency]]
+id = "blackfactory"
+root_hint = "missing-blackfactory"
+required = false
+role = "product_skill_source"
+
+[[consumer_skill]]
+name = "lind"
+dependency = "blackfactory"
+source = "skills/lind"
+targets = ["agents", "claude"]
+""",
+            )
+        )
+        findings, counts = self.run_doctor()
+        self.assertEqual(counts["error"], 0, findings)
+        self.assertIn("consumer_optional_unavailable", {item.code for item in findings})
+
+    def test_external_consumer_rejects_local_editable_shadow_copy(self):
+        dependency_root = self.root / "external-blackfactory"
+        source = dependency_root / "skills" / "lind"
+        self.write_skill(source, "lind")
+        self.write_skill(self.root / "skills" / "src" / "lind", "lind")
+        self.direct_projection(self.root / ".agents" / "skills", "lind", source)
+        self.direct_projection(self.root / ".claude" / "skills", "lind", source)
+        self.write_registry(
+            self.repo_registry(
+                "",
+                """[[dependency]]
+id = "blackfactory"
+root_hint = "external-blackfactory"
+required = false
+role = "product_skill_source"
+
+[[consumer_skill]]
+name = "lind"
+dependency = "blackfactory"
+source = "skills/lind"
+targets = ["agents", "claude"]
+""",
+            )
+        )
+        findings, _ = self.run_doctor()
+        self.assertIn("consumer_shadow_copy", {item.code for item in findings})
+
 
 if __name__ == "__main__":
     unittest.main()
