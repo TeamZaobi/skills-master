@@ -203,6 +203,29 @@ reason = "test-declared mapping"
         self.assertIn("frontmatter_name_mismatch", categories)
         self.assertNotIn("allowed_frontmatter_name_mismatch", categories)
 
+    def test_long_frontmatter_closing_delimiter_after_line_200_is_parseable(self):
+        source = self.user_agents / "long-metadata"
+        source.mkdir(parents=True)
+        metadata_lines = "\n".join(f"  field_{index}: value" for index in range(250))
+        (source / "SKILL.md").write_text(
+            "---\n"
+            "name: long-metadata\n"
+            "description: Use when testing long frontmatter.\n"
+            "metadata:\n"
+            f"{metadata_lines}\n"
+            "---\n"
+            "\n# Long Metadata\n",
+            encoding="utf-8",
+        )
+
+        output = self.root / "long-frontmatter"
+        self.run_scan(output)
+        ledger = json.loads((output / "finding-ledger.v1.json").read_text(encoding="utf-8"))
+        categories = [item["category"] for item in ledger["findings"]]
+
+        self.assertNotIn("frontmatter_invalid", categories)
+        self.assertNotIn("frontmatter_missing_name", categories)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -104,7 +104,7 @@ def frontmatter(path: Path) -> dict:
     if not lines or lines[0].strip() != "---":
         return result
     try:
-        end = next(i for i, line in enumerate(lines[1:200], 1) if line.strip() == "---")
+        end = next(i for i, line in enumerate(lines[1:], 1) if line.strip() == "---")
     except StopIteration:
         return result
     result["parseable"] = True
