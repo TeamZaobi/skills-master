@@ -25,6 +25,9 @@ def parse_markdown_frontmatter(doc_path: Path) -> tuple[dict[str, str], str]:
     i = 0
     while i < len(frontmatter_lines):
         line = frontmatter_lines[i]
+        if line.startswith((" ", "\t")):
+            i += 1
+            continue
         if ":" not in line:
             i += 1
             continue
