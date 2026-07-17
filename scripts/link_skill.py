@@ -20,6 +20,7 @@ Usage:
     link_skill.py <skill-path> --status               # Show link status
     link_skill.py <skill-path> --unlink               # Remove all links
     link_skill.py <skill-path> --unlink --targets codex  # Remove specific links
+    link_skill.py --registry <registry.toml> --all       # Link every registered skill
     link_skill.py <skill-path> --force                # Overwrite existing links
 
 Examples:
@@ -27,11 +28,18 @@ Examples:
     link_skill.py ./.agents/skills/my-skill --project-root /path/to/repo
     link_skill.py /path/to/my-skill --targets claude
     link_skill.py ~/.agents/skills/my-skill --status
+    link_skill.py --registry ./skills/registry.toml --all --status
 """
 
 import sys
 import os
 from pathlib import Path
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from toml_compat import load_toml
 
 # ─── Default link targets ───────────────────────────────────────────
 # Keep one editable source of truth and project outward to tool-local
@@ -123,6 +131,96 @@ def compute_relative_symlink(link_location, target_real_path):
     return os.path.relpath(target_real_path, link_location.parent)
 
 
+def load_registry(registry_path):
+    """Load a registry v2 document and return it with its project root."""
+    path = Path(registry_path).expanduser().resolve()
+    registry = load_toml(path)
+    if registry.get("version") != 2:
+        raise ValueError(f"Registry must use version = 2: {path}")
+    if path.parent.name == "skills":
+        project_root = path.parent.parent
+    else:
+        project_root = path.parent
+    return registry, project_root
+
+
+def registry_projection_entries(registry, project_root, skill_entry):
+    """Resolve the projection targets declared for one registry skill."""
+    projections = {item.get("id"): item for item in registry.get("projection", [])}
+    requested = skill_entry.get("targets")
+    if requested is None:
+        requested = [
+            projection_id
+            for projection_id, item in projections.items()
+            if item.get("required", True)
+        ]
+
+    entries = []
+    for projection_id in requested:
+        item = projections.get(projection_id)
+        if item is None:
+            raise ValueError(
+                f"Skill {skill_entry.get('name')} names unknown projection {projection_id}"
+            )
+        entries.append(
+            {
+                "label": projection_id,
+                "dir": (project_root / item["path"]).resolve(),
+                "link_allowed": True,
+            }
+        )
+    return entries
+
+
+def link_skill_to_entries(skill_path, entries, force=False):
+    """Create direct projections for an explicit list of target directories."""
+    skill_name = skill_path.name
+    created, skipped, warnings = 0, 0, 0
+
+    for entry in entries:
+        target_dir = entry["dir"]
+        label = entry["label"]
+
+        if is_native_skill_path(skill_path, target_dir):
+            print(f"  ✓  {label}: native path {target_dir} (no link needed)")
+            skipped += 1
+            continue
+
+        if not entry.get("link_allowed", True):
+            print(f"  ⚠  {label}: expected source under {target_dir}; no link created")
+            warnings += 1
+            continue
+
+        target_dir.mkdir(parents=True, exist_ok=True)
+        link_path = target_dir / skill_name
+        rel_target = compute_relative_symlink(link_path, skill_path)
+
+        if link_path.is_symlink():
+            existing = os.readlink(link_path)
+            existing_resolved = (link_path.parent / existing).resolve()
+            if existing_resolved == skill_path:
+                print(f"  ✓  {label}: already linked (skipped)")
+                skipped += 1
+                continue
+            if force:
+                link_path.unlink()
+                print(f"  ⚡ {label}: overwriting (was → {existing})")
+            else:
+                print(f"  ⚠  {label}: exists but points to {existing} (use --force to overwrite)")
+                warnings += 1
+                continue
+        elif link_path.exists():
+            print(f"  ⚠  {label}: {link_path} exists as a real directory/file, skipping")
+            warnings += 1
+            continue
+
+        link_path.symlink_to(rel_target)
+        print(f"  ✅ {label}: {link_path} → {rel_target}")
+        created += 1
+
+    return created, skipped, warnings
+
+
 def link_skill(skill_path, targets=None, force=False, project_root=None):
     """
     Create symlinks for a skill in the specified tool directories.
@@ -138,59 +236,15 @@ def link_skill(skill_path, targets=None, force=False, project_root=None):
     if targets is None:
         targets = default_targets(project_root)
 
-    skill_name = skill_path.name
-    created, skipped, warnings = 0, 0, 0
-
+    entries = []
     for tool in targets:
-        entries = get_target_entries(tool, project_root)
-        if not entries:
+        tool_entries = get_target_entries(tool, project_root)
+        if not tool_entries:
             print(f"  ⚠  Unknown tool: {tool}")
-            warnings += 1
             continue
+        entries.extend(tool_entries)
 
-        for entry in entries:
-            target_dir = entry["dir"]
-            label = entry["label"]
-
-            if is_native_skill_path(skill_path, target_dir):
-                print(f"  ✓  {label}: native path {target_dir} (no link needed)")
-                skipped += 1
-                continue
-
-            if not entry["link_allowed"]:
-                print(f"  ⚠  {label}: expected source under {target_dir}; no link created")
-                warnings += 1
-                continue
-
-            target_dir.mkdir(parents=True, exist_ok=True)
-
-            link_path = target_dir / skill_name
-            rel_target = compute_relative_symlink(link_path, skill_path)
-
-            if link_path.is_symlink():
-                existing = os.readlink(link_path)
-                existing_resolved = (link_path.parent / existing).resolve()
-                if existing_resolved == skill_path:
-                    print(f"  ✓  {label}: already linked (skipped)")
-                    skipped += 1
-                    continue
-                if force:
-                    link_path.unlink()
-                    print(f"  ⚡ {label}: overwriting (was → {existing})")
-                else:
-                    print(f"  ⚠  {label}: exists but points to {existing} (use --force to overwrite)")
-                    warnings += 1
-                    continue
-            elif link_path.exists():
-                print(f"  ⚠  {label}: {link_path} exists as a real directory/file, skipping")
-                warnings += 1
-                continue
-
-            link_path.symlink_to(rel_target)
-            print(f"  ✅ {label}: {link_path} → {rel_target}")
-            created += 1
-
-    return created, skipped, warnings
+    return link_skill_to_entries(skill_path, entries, force=force)
 
 
 def unlink_skill(skill_path, targets=None, project_root=None):
@@ -203,37 +257,44 @@ def unlink_skill(skill_path, targets=None, project_root=None):
     if targets is None:
         targets = default_targets(project_root)
 
+    entries = []
+    for tool in targets:
+        tool_entries = get_target_entries(tool, project_root)
+        if not tool_entries:
+            continue
+        entries.extend(tool_entries)
+
+    return unlink_skill_entries(skill_path, entries)
+
+
+def unlink_skill_entries(skill_path, entries):
+    """Remove projections from an explicit list of target directories."""
     skill_name = skill_path.name
     removed, not_found = 0, 0
 
-    for tool in targets:
-        entries = get_target_entries(tool, project_root)
-        if not entries:
+    for entry in entries:
+        target_dir = entry["dir"]
+        label = entry["label"]
+
+        if is_native_skill_path(skill_path, target_dir):
+            print(f"  -  {label}: native path (no link to remove)")
+            not_found += 1
             continue
 
-        for entry in entries:
-            target_dir = entry["dir"]
-            label = entry["label"]
+        if not entry.get("link_allowed", True):
+            print(f"  -  {label}: scope expects a native source")
+            not_found += 1
+            continue
 
-            if is_native_skill_path(skill_path, target_dir):
-                print(f"  -  {label}: native path (no link to remove)")
-                not_found += 1
-                continue
+        link_path = target_dir / skill_name
 
-            if not entry["link_allowed"]:
-                print(f"  -  {label}: scope expects a native source")
-                not_found += 1
-                continue
-
-            link_path = target_dir / skill_name
-
-            if link_path.is_symlink():
-                link_path.unlink()
-                print(f"  🗑  {label}: removed {link_path}")
-                removed += 1
-            else:
-                print(f"  -  {label}: no link found")
-                not_found += 1
+        if link_path.is_symlink():
+            link_path.unlink()
+            print(f"  🗑  {label}: removed {link_path}")
+            removed += 1
+        else:
+            print(f"  -  {label}: no link found")
+            not_found += 1
 
     return removed, not_found
 
@@ -245,7 +306,6 @@ def status_skill(skill_path, targets=None, project_root=None):
     if targets is None:
         targets = default_targets(project_root)
 
-    skill_name = skill_path.name
     scope_label = (
         f"project {Path(project_root).expanduser().resolve()}"
         if project_root is not None
@@ -255,36 +315,45 @@ def status_skill(skill_path, targets=None, project_root=None):
     print(f"   Source: {skill_path}")
     print(f"   Scope: {scope_label}\n")
 
+    entries = []
     for tool in targets:
-        entries = get_target_entries(tool, project_root)
-        if not entries:
+        tool_entries = get_target_entries(tool, project_root)
+        if not tool_entries:
+            continue
+        entries.extend(tool_entries)
+
+    status_skill_entries(skill_path, entries)
+
+
+def status_skill_entries(skill_path, entries):
+    """Display projection status for explicit target directories."""
+    skill_name = skill_path.name
+
+    for entry in entries:
+        target_dir = entry["dir"]
+        label = entry["label"]
+
+        if is_native_skill_path(skill_path, target_dir):
+            print(f"  ✅ {label:12s} native path ({target_dir})")
             continue
 
-        for entry in entries:
-            target_dir = entry["dir"]
-            label = entry["label"]
+        if not entry.get("link_allowed", True):
+            print(f"  ⚠  {label:12s} expected source under {target_dir}")
+            continue
 
-            if is_native_skill_path(skill_path, target_dir):
-                print(f"  ✅ {label:12s} native path ({target_dir})")
-                continue
+        link_path = target_dir / skill_name
 
-            if not entry["link_allowed"]:
-                print(f"  ⚠  {label:12s} expected source under {target_dir}")
-                continue
-
-            link_path = target_dir / skill_name
-
-            if link_path.is_symlink():
-                dest = os.readlink(link_path)
-                dest_resolved = (link_path.parent / dest).resolve()
-                if dest_resolved == skill_path:
-                    print(f"  ✅ {label:12s} → {dest} (correct)")
-                else:
-                    print(f"  ⚠  {label:12s} → {dest} (MISMATCH, expected → {skill_path})")
-            elif link_path.exists():
-                print(f"  📁 {label:12s} real directory (not a symlink)")
+        if link_path.is_symlink():
+            dest = os.readlink(link_path)
+            dest_resolved = (link_path.parent / dest).resolve()
+            if dest_resolved == skill_path:
+                print(f"  ✅ {label:12s} → {dest} (correct)")
             else:
-                print(f"  ❌ {label:12s} not linked")
+                print(f"  ⚠  {label:12s} → {dest} (MISMATCH, expected → {skill_path})")
+        elif link_path.exists():
+            print(f"  📁 {label:12s} real directory (not a symlink)")
+        else:
+            print(f"  ❌ {label:12s} not linked")
 
 
 def parse_targets(targets_str):
@@ -314,7 +383,7 @@ Examples:
   %(prog)s ~/.agents/skills/my-skill --unlink     # Remove all links
         """,
     )
-    parser.add_argument("skill_path", help="Path to the skill directory")
+    parser.add_argument("skill_path", nargs="?", help="Path to the skill directory")
     parser.add_argument(
         "--targets",
         help="Comma-separated tool names (default: claude,codex,antigravity for user scope; claude,codex for project scope)",
@@ -326,15 +395,65 @@ Examples:
     parser.add_argument("--status", action="store_true", help="Show link status only")
     parser.add_argument("--unlink", action="store_true", help="Remove links")
     parser.add_argument("--force", action="store_true", help="Overwrite existing non-matching links")
+    parser.add_argument("--registry", help="Registry v2 TOML file")
+    parser.add_argument("--all", action="store_true", help="Operate on every skill in --registry")
 
     args = parser.parse_args()
 
-    # Resolve skill path
+    if args.registry:
+        if args.targets:
+            parser.error("--targets cannot be combined with --registry")
+        try:
+            registry, registry_root = load_registry(args.registry)
+        except (OSError, RuntimeError, ValueError) as exc:
+            parser.error(str(exc))
+
+        selected = []
+        requested_path = Path(args.skill_path).expanduser().resolve() if args.skill_path else None
+        for item in registry.get("skill", []):
+            source = (registry_root / item["source"]).resolve()
+            if args.all or requested_path == source or args.skill_path == item.get("name"):
+                layout = item.get("layout", registry.get("layout"))
+                projection_source = (
+                    (registry_root / item["output_dir"]).resolve()
+                    if layout == "generated_product" and item.get("output_dir")
+                    else source
+                )
+                selected.append((item, projection_source))
+        if not selected:
+            parser.error("Select a registered skill by path/name, or pass --all")
+
+        totals = [0, 0, 0]
+        for item, source in selected:
+            skill_path = resolve_skill_path(str(source))
+            if skill_path is None:
+                totals[2] += 1
+                continue
+            try:
+                entries = registry_projection_entries(registry, registry_root, item)
+            except ValueError as exc:
+                print(f"  ⚠  {exc}")
+                totals[2] += 1
+                continue
+            print(f"\n🔗 Registry skill: {item['name']}")
+            if args.status:
+                status_skill_entries(skill_path, entries)
+            elif args.unlink:
+                removed, missing = unlink_skill_entries(skill_path, entries)
+                totals[0] += removed
+                totals[1] += missing
+            else:
+                result = link_skill_to_entries(skill_path, entries, force=args.force)
+                totals = [left + right for left, right in zip(totals, result)]
+        sys.exit(1 if totals[2] else 0)
+
+    if not args.skill_path:
+        parser.error("skill_path is required unless --registry is used")
+
     skill_path = resolve_skill_path(args.skill_path)
     if skill_path is None:
         sys.exit(1)
 
-    # Parse targets
     targets = parse_targets(args.targets) if args.targets else None
     project_root = args.project_root
 

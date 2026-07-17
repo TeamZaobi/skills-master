@@ -1,0 +1,257 @@
+import os
+import tempfile
+import unittest
+from pathlib import Path
+
+from scripts.doctor import RepositoryDoctor, expected_source, summarize
+
+
+SKILL_BODY = """---
+name: {name}
+description: Use when testing {name}.
+---
+
+# {name}
+"""
+
+
+class LayoutGovernanceTests(unittest.TestCase):
+    def setUp(self):
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.root = Path(self.tempdir.name)
+        (self.root / "skills").mkdir()
+
+    def tearDown(self):
+        self.tempdir.cleanup()
+
+    def write_skill(self, path, name):
+        path.mkdir(parents=True, exist_ok=True)
+        (path / "SKILL.md").write_text(SKILL_BODY.format(name=name), encoding="utf-8")
+
+    def write_registry(self, body):
+        path = self.root / "skills" / "registry.toml"
+        path.write_text(body, encoding="utf-8")
+        return path
+
+    def direct_projection(self, directory, name, source):
+        directory.mkdir(parents=True, exist_ok=True)
+        link = directory / name
+        link.symlink_to(os.path.relpath(source, directory))
+        return link
+
+    def run_doctor(self):
+        doctor = RepositoryDoctor(self.root)
+        findings = doctor.run()
+        return findings, summarize(findings)
+
+    def repo_registry(self, skill_block, dependencies=""):
+        return f"""version = 2
+layout = "repo_product"
+canonical_dir = "skills"
+
+[[projection]]
+id = "agents"
+path = ".agents/skills"
+hosts = ["codex", "gemini"]
+required = true
+
+[[projection]]
+id = "claude"
+path = ".claude/skills"
+hosts = ["claude"]
+required = true
+
+{skill_block}
+{dependencies}
+"""
+
+    def test_repo_product_is_valid(self):
+        source = self.root / "skills" / "example"
+        self.write_skill(source, "example")
+        self.direct_projection(self.root / ".agents" / "skills", "example", source)
+        self.direct_projection(self.root / ".claude" / "skills", "example", source)
+        self.write_registry(
+            self.repo_registry(
+                """[[skill]]
+name = "example"
+source = "skills/example"
+targets = ["agents", "claude"]
+"""
+            )
+        )
+        findings, counts = self.run_doctor()
+        self.assertEqual(counts["error"], 0, findings)
+
+    def test_project_native_stays_under_agents(self):
+        source = self.root / ".agents" / "skills" / "local-only"
+        self.write_skill(source, "local-only")
+        self.direct_projection(self.root / ".claude" / "skills", "local-only", source)
+        self.write_registry(
+            """version = 2
+layout = "project_native"
+canonical_dir = ".agents/skills"
+
+[[projection]]
+id = "agents"
+path = ".agents/skills"
+hosts = ["codex", "gemini"]
+
+[[projection]]
+id = "claude"
+path = ".claude/skills"
+hosts = ["claude"]
+
+[[skill]]
+name = "local-only"
+source = ".agents/skills/local-only"
+targets = ["agents", "claude"]
+"""
+        )
+        _, counts = self.run_doctor()
+        self.assertEqual(counts["error"], 0)
+
+    def test_user_native_contract_has_stable_path(self):
+        self.assertEqual(
+            expected_source(self.root, "user_native", "personal"),
+            (Path.home() / ".agents" / "skills" / "personal").resolve(),
+        )
+
+    def test_generated_product_requires_and_uses_dist_output(self):
+        source = self.root / "skills" / "src" / "compiled"
+        output = self.root / "skills" / "dist" / "compiled"
+        self.write_skill(source, "compiled")
+        self.write_skill(output, "compiled")
+        self.direct_projection(self.root / ".agents" / "skills", "compiled", output)
+        self.direct_projection(self.root / ".claude" / "skills", "compiled", output)
+        self.write_registry(
+            self.repo_registry(
+                """[[skill]]
+name = "compiled"
+source = "skills/src/compiled"
+layout = "generated_product"
+targets = ["agents", "claude"]
+build_command = "make compiled"
+output_dir = "skills/dist/compiled"
+reproducibility_check = "make verify-compiled"
+"""
+            )
+        )
+        _, counts = self.run_doctor()
+        self.assertEqual(counts["error"], 0)
+
+    def test_repo_product_under_src_is_rejected(self):
+        source = self.root / "skills" / "src" / "wrong"
+        self.write_skill(source, "wrong")
+        self.write_registry(
+            self.repo_registry(
+                """[[skill]]
+name = "wrong"
+source = "skills/src/wrong"
+targets = []
+"""
+            )
+        )
+        findings, _ = self.run_doctor()
+        self.assertIn("canonical_path", {item.code for item in findings})
+
+    def test_generated_product_without_build_contract_is_rejected(self):
+        source = self.root / "skills" / "src" / "incomplete"
+        self.write_skill(source, "incomplete")
+        self.write_registry(
+            self.repo_registry(
+                """[[skill]]
+name = "incomplete"
+source = "skills/src/incomplete"
+layout = "generated_product"
+targets = []
+"""
+            )
+        )
+        findings, _ = self.run_doctor()
+        self.assertIn("generated_contract", {item.code for item in findings})
+
+    def test_dangling_and_projection_chain_are_rejected(self):
+        source = self.root / "skills" / "linked"
+        self.write_skill(source, "linked")
+        agents = self.root / ".agents" / "skills"
+        claude = self.root / ".claude" / "skills"
+        agents.mkdir(parents=True)
+        claude.mkdir(parents=True)
+        (agents / "linked").symlink_to("../../missing/linked")
+        (claude / "linked").symlink_to(os.path.relpath(agents / "linked", claude))
+        self.write_registry(
+            self.repo_registry(
+                """[[skill]]
+name = "linked"
+source = "skills/linked"
+targets = ["agents", "claude"]
+"""
+            )
+        )
+        findings, _ = self.run_doctor()
+        codes = {item.code for item in findings}
+        self.assertIn("projection_dangling", codes)
+        self.assertIn("projection_chain", codes)
+
+    def test_duplicate_source_is_rejected(self):
+        source = self.root / "skills" / "one"
+        self.write_skill(source, "one")
+        self.write_registry(
+            self.repo_registry(
+                """[[skill]]
+name = "one"
+source = "skills/one"
+targets = []
+
+[[skill]]
+name = "two"
+source = "skills/one"
+targets = []
+"""
+            )
+        )
+        findings, _ = self.run_doctor()
+        self.assertIn("skill_source_duplicate", {item.code for item in findings})
+
+    def test_undeclared_external_markdown_dependency_is_rejected(self):
+        source = self.root / "skills" / "external-reader"
+        self.write_skill(source, "external-reader")
+        with (source / "SKILL.md").open("a", encoding="utf-8") as handle:
+            handle.write("\n[External](../../../Sibling/README.md)\n")
+        self.write_registry(
+            self.repo_registry(
+                """[[skill]]
+name = "external-reader"
+source = "skills/external-reader"
+targets = []
+"""
+            )
+        )
+        findings, _ = self.run_doctor()
+        self.assertIn("external_dependency_undeclared", {item.code for item in findings})
+
+    def test_missing_optional_dependency_is_informational(self):
+        source = self.root / "skills" / "portable"
+        self.write_skill(source, "portable")
+        self.write_registry(
+            self.repo_registry(
+                """[[skill]]
+name = "portable"
+source = "skills/portable"
+targets = []
+""",
+                """[[dependency]]
+id = "optional-sibling"
+root_hint = "../OptionalSibling"
+required = false
+role = "integration_only"
+""",
+            )
+        )
+        findings, counts = self.run_doctor()
+        self.assertEqual(counts["error"], 0)
+        self.assertIn("dependency_optional_missing", {item.code for item in findings})
+
+
+if __name__ == "__main__":
+    unittest.main()

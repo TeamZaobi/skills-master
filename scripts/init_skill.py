@@ -3,12 +3,13 @@
 Skill Initializer - Creates a new skill from template
 
 Usage:
-    init_skill.py <skill-name> [--path <path>] [--project-root <path>] [--link | --no-link]
+    init_skill.py <skill-name> [--layout <shape>] [--path <path>] [--project-root <path>] [--link | --no-link]
 
 Examples:
     init_skill.py my-new-skill --path ~/.agents/skills           # auto-links to Claude, Codex, and Antigravity
     init_skill.py my-new-skill --path ~/.agents/skills --no-link # skip linking
     init_skill.py my-skill --project-root /path/to/repo          # create in /path/to/repo/.agents/skills and auto-link
+    init_skill.py my-skill --layout repo-product --project-root /path/to/repo # create in /path/to/repo/skills
     init_skill.py my-skill --path ./project/skills --link        # force link to Claude and Codex
 """
 
@@ -20,6 +21,12 @@ from pathlib import Path
 MAX_SKILL_NAME_LENGTH = 64
 RESERVED_NAME_TOKENS = {'anthropic', 'claude', 'skill', 'ai'}
 DEFAULT_GLOBAL_HUB = (Path.home() / ".agents" / "skills").resolve()
+LAYOUTS = {
+    "user-native": "user_native",
+    "project-native": "project_native",
+    "repo-product": "repo_product",
+    "generated-product": "generated_product",
+}
 
 
 SKILL_TEMPLATE = """---
@@ -321,6 +328,24 @@ def default_project_hub(project_root):
     return Path(project_root).expanduser().resolve() / ".agents" / "skills"
 
 
+def default_layout_path(layout, project_root=None):
+    """Return the canonical parent directory for a declared asset shape."""
+    if layout == "user-native":
+        return DEFAULT_GLOBAL_HUB
+
+    if project_root is None:
+        raise ValueError(f"--layout {layout} requires --project-root")
+
+    root = Path(project_root).expanduser().resolve()
+    if layout == "project-native":
+        return root / ".agents" / "skills"
+    if layout == "repo-product":
+        return root / "skills"
+    if layout == "generated-product":
+        return root / "skills" / "src"
+    raise ValueError(f"Unknown layout: {layout}")
+
+
 def is_project_hub(path, project_root):
     """Check if path is the shared project skill hub (<project-root>/.agents/skills)."""
     if project_root is None:
@@ -373,6 +398,14 @@ Examples:
         "--project-root",
         help="Project root for project-scoped skills; default shared hub is <project-root>/.agents/skills",
     )
+    parser.add_argument(
+        "--layout",
+        choices=sorted(LAYOUTS),
+        help=(
+            "Canonical asset shape. Defaults to user-native without --project-root "
+            "and project-native with --project-root."
+        ),
+    )
 
     link_group = parser.add_mutually_exclusive_group()
     link_group.add_argument("--link", action="store_true", default=None,
@@ -390,16 +423,18 @@ Examples:
         print(f"❌ Error: {error_message}")
         sys.exit(1)
 
+    layout = args.layout or ("project-native" if args.project_root else "user-native")
     target_path = args.path
     if target_path is None:
-        target_path = (
-            str(default_project_hub(args.project_root))
-            if args.project_root
-            else str(DEFAULT_GLOBAL_HUB)
-        )
+        try:
+            target_path = str(default_layout_path(layout, args.project_root))
+        except ValueError as exc:
+            print(f"❌ Error: {exc}")
+            sys.exit(1)
 
     print(f"🚀 Initializing skill: {skill_name}")
     print(f"   Location: {target_path}")
+    print(f"   Layout: {LAYOUTS[layout]}")
     if args.project_root:
         print(f"   Project root: {Path(args.project_root).expanduser().resolve()}")
     print()
@@ -411,10 +446,17 @@ Examples:
         should_link = args.link
         if should_link is None and not args.no_link:
             # Auto-link when creating in the global hub
-            should_link = is_global_hub(target_path) or is_project_hub(target_path, args.project_root)
+            should_link = layout in {"user-native", "project-native", "repo-product"}
 
         if should_link:
             auto_link(result, project_root=args.project_root)
+
+        if layout == "generated-product":
+            print(
+                "\n⚠  generated_product source is not linked directly. "
+                "Register its build_command, output_dir, and reproducibility_check, "
+                "then project the generated output."
+            )
 
         sys.exit(0)
     else:

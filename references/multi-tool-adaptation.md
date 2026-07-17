@@ -6,6 +6,12 @@ Use this reference when a skill or agent lifecycle task involves more than one h
 
 Keep one canonical owner for the external capability while making each host consume the smallest compatible surface.
 
+Select the canonical location with
+[`layout-contract.md`](layout-contract.md) before creating projections. A
+repository-owned distributable skill uses `skills/<name>`; project host paths
+remain direct read-only projections. `.agents/skills` may serve both Codex and
+Gemini/Antigravity when the project hosts support that shared discovery path.
+
 The adaptation should answer:
 
 - What job is the tool actually solving, and do official manuals, installed examples, or community practice already show the expected integration path?
@@ -45,6 +51,13 @@ Shape: one directory whose main contract is `SKILL.md`.
 Default action: keep one editable source, then use `scripts/link_skill.py` for supported hosts.
 
 Required check: run `link_skill.py <path> --status`, then open a fresh host session if the host caches discovery.
+
+For a registry v2 repository, prefer:
+
+```bash
+python3 scripts/link_skill.py --registry skills/registry.toml --all
+python3 scripts/doctor.py <project-root>
+```
 
 ### Native Companion Agent
 
