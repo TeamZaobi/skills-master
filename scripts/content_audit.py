@@ -132,8 +132,10 @@ def frontmatter_contract_for(realpath: str, contracts: list[dict]) -> dict | Non
             "id": contract.get("id", "repo-contract"),
             "repo": str(repo),
             "extensions": sorted(set(contract.get("extensions", []))),
+            "legacy_extensions": sorted(set(contract.get("legacy_extensions", []))),
             "authority": str(contract.get("authority", "")),
             "disposition": contract.get("disposition", "repo_product_contract"),
+            "legacy_disposition": contract.get("legacy_disposition", "repo_cleanup_candidate_no_fleet_rewrite"),
         }
     return None
 
@@ -261,7 +263,12 @@ def dimensions_for(
     declared_repo_extensions = sorted(
         set(extension_keys) & set((frontmatter_contract or {}).get("extensions", []))
     )
-    undeclared_extension_keys = sorted(set(extension_keys) - set(declared_repo_extensions))
+    legacy_repo_extensions = sorted(
+        set(extension_keys) & set((frontmatter_contract or {}).get("legacy_extensions", []))
+    )
+    undeclared_extension_keys = sorted(
+        set(extension_keys) - set(declared_repo_extensions) - set(legacy_repo_extensions)
+    )
     if extension_keys:
         if source_management["class"] == "upstream_install_lock":
             observations.append({
@@ -278,6 +285,16 @@ def dimensions_for(
                     "values": declared_repo_extensions,
                     "contract": frontmatter_contract,
                     "disposition": "repo_product_contract",
+                })
+            if legacy_repo_extensions:
+                observations.append({
+                    "category": "repo_managed_legacy_frontmatter_extension",
+                    "dimension": "single_source_of_truth",
+                    "values": legacy_repo_extensions,
+                    "contract": frontmatter_contract,
+                    "disposition": (frontmatter_contract or {}).get(
+                        "legacy_disposition", "repo_cleanup_candidate_no_fleet_rewrite"
+                    ),
                 })
         if undeclared_extension_keys and source_management["class"] != "upstream_install_lock":
             findings.append({
@@ -352,6 +369,7 @@ def dimensions_for(
         "frontmatter_top_level_keys": frontmatter_keys,
         "frontmatter_extension_keys": extension_keys,
         "frontmatter_declared_repo_extension_keys": declared_repo_extensions,
+        "frontmatter_legacy_repo_extension_keys": legacy_repo_extensions,
         "frontmatter_undeclared_extension_keys": undeclared_extension_keys,
     }
     return {"dimensions": dimensions, "metrics": metrics}, findings, observations

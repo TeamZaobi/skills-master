@@ -29,9 +29,18 @@ locked_install_extensions_are_upstream_owned = true
 [[frontmatter_contract]]
 id = "hermes-native-v1"
 repo = "~/Agents/hermes-muniu"
-extensions = ["author", "category", "platforms", "tags", "version"]
-authority = "~/Agents/hermes-muniu/AGENTS.md#skillmd-frontmatter"
+extensions = ["author", "category", "platforms", "prerequisites", "required_credential_files", "setup", "tags", "version"]
+legacy_extensions = ["dependencies", "title", "triggers"]
+authority = "~/Agents/hermes-muniu/AGENTS.md#skillmd-frontmatter; ~/Agents/hermes-muniu/tools/skills_tool.py"
 disposition = "repo_product_contract"
+legacy_disposition = "repo_cleanup_candidate_no_fleet_rewrite"
+
+[[frontmatter_contract]]
+id = "bo-chunxin-project-v1"
+repo = "~/Agents/薄纯欣"
+extensions = ["tags", "version"]
+authority = "project-local Skill release metadata convention"
+disposition = "project_local_contract_without_committed_repo_baseline"
 
 [[allowed_frontmatter_name_mismatch]]
 repo = "~/Agents/hermes-muniu"

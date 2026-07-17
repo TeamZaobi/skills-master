@@ -206,6 +206,36 @@ codex_native_allowed_frontmatter_keys = ["allowed-tools", "compatibility", "desc
         self.assertNotIn("unsupported_frontmatter_key", [item["category"] for item in findings])
         self.assertIn("repo_managed_frontmatter_extension", [item["category"] for item in observations])
 
+    def test_repo_legacy_extension_is_observed_as_cleanup_candidate(self):
+        import importlib.util
+        module_path = Path(__file__).resolve().parent.parent / "scripts" / "content_audit.py"
+        spec = importlib.util.spec_from_file_location("content_audit_legacy_contract", module_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        contract = {
+            "id": "test",
+            "extensions": ["version"],
+            "legacy_extensions": ["dependencies"],
+            "legacy_disposition": "repo_cleanup_candidate_no_fleet_rewrite",
+        }
+        management = {"class": "project_or_repo_owner"}
+        skill_text = self.project_native / "SKILL.md"
+        content = skill_text.read_text(encoding="utf-8").replace(
+            "version: 1.0.0\n", "version: 1.0.0\ndependencies: [legacy-package]\n"
+        )
+        skill_text.write_text(content, encoding="utf-8")
+        static, findings, observations = module.dimensions_for(
+            skill_text,
+            "Use when testing a project Skill.",
+            module.DEFAULT_FRONTMATTER_KEYS,
+            management,
+            contract,
+        )
+        self.assertNotIn("unsupported_frontmatter_key", [item["category"] for item in findings])
+        legacy = next(item for item in observations if item["category"] == "repo_managed_legacy_frontmatter_extension")
+        self.assertEqual(legacy["values"], ["dependencies"])
+        self.assertEqual(legacy["disposition"], "repo_cleanup_candidate_no_fleet_rewrite")
+
 
 if __name__ == "__main__":
     unittest.main()
