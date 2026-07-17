@@ -123,6 +123,30 @@ codex_native_allowed_frontmatter_keys = ["allowed-tools", "compatibility", "desc
         profile = payload["profiles"][0]
         self.assertEqual(profile["metrics"]["orphaned_reference_files"], [])
 
+    def test_reference_reachable_through_backtick_index_is_not_orphaned(self):
+        reference_dir = self.skill / "references"
+        reference_dir.mkdir()
+        (reference_dir / "index.md").write_text("For detailed handling, read `detail.md`.\n", encoding="utf-8")
+        (reference_dir / "detail.md").write_text("# Detail\n", encoding="utf-8")
+        with (self.skill / "SKILL.md").open("a", encoding="utf-8") as fh:
+            fh.write("\nWhen needed, read `references/index.md`.\n")
+        payload = self.run_audit()
+        profile = payload["profiles"][0]
+        self.assertEqual(profile["metrics"]["orphaned_reference_files"], [])
+
+    def test_reference_directory_pointer_discloses_family(self):
+        reference_dir = self.skill / "references"
+        family_dir = reference_dir / "family"
+        family_dir.mkdir(parents=True)
+        (reference_dir / "index.md").write_text("For family-specific handling, inspect `family/`.\n", encoding="utf-8")
+        (family_dir / "one.md").write_text("# One\n", encoding="utf-8")
+        (family_dir / "two.md").write_text("# Two\n", encoding="utf-8")
+        with (self.skill / "SKILL.md").open("a", encoding="utf-8") as fh:
+            fh.write("\nWhen needed, read `references/index.md`.\n")
+        payload = self.run_audit()
+        profile = payload["profiles"][0]
+        self.assertEqual(profile["metrics"]["orphaned_reference_files"], [])
+
     def test_project_native_real_directory_is_audited_and_extension_is_owner_finding(self):
         payload = self.run_audit()
         profile = next(item for item in payload["profiles"] if item["name"] == "project-native")

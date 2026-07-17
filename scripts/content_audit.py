@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from collections import Counter, defaultdict
@@ -161,20 +162,55 @@ def markdown_targets_outside_fences(text: str) -> list[tuple[str, str]]:
 
 def reachable_reference_files(skill_root: Path, skill_text: str, reference_files: list[Path]) -> set[Path]:
     known = {path.resolve(strict=False) for path in reference_files}
+    reference_root = skill_root / "references"
+    basename_counts = Counter(path.name for path in reference_files)
+
+    def mentions(current_dir: Path, current_text: str) -> set[Path]:
+        mentioned: set[Path] = set()
+        for ref in reference_files:
+            tokens = {
+                ref.relative_to(skill_root).as_posix(),
+                Path(os.path.relpath(ref, current_dir)).as_posix(),
+            }
+            if basename_counts[ref.name] == 1:
+                tokens.add(ref.name)
+            if any(token in current_text for token in tokens):
+                mentioned.add(ref.resolve(strict=False))
+
+        directories = {
+            parent
+            for ref in reference_files
+            for parent in ref.parents
+            if parent != reference_root and reference_root in parent.parents
+        }
+        for directory in directories:
+            tokens = {
+                directory.relative_to(skill_root).as_posix().rstrip("/") + "/",
+                Path(os.path.relpath(directory, current_dir)).as_posix().rstrip("/") + "/",
+            }
+            if any(token in current_text for token in tokens):
+                mentioned.update(
+                    ref.resolve(strict=False)
+                    for ref in reference_files
+                    if directory in ref.parents
+                )
+        return mentioned
+
     reachable: set[Path] = set()
     queue: list[Path] = []
-    for ref in reference_files:
-        relative = str(ref.relative_to(skill_root))
-        if relative in skill_text or ref.name in skill_text:
-            resolved = ref.resolve(strict=False)
-            reachable.add(resolved)
-            queue.append(ref)
+    for resolved in mentions(skill_root, skill_text):
+        reachable.add(resolved)
+        queue.append(next(ref for ref in reference_files if ref.resolve(strict=False) == resolved))
     while queue:
         current = queue.pop(0)
         try:
             current_text = current.read_text(encoding="utf-8")
         except (OSError, UnicodeError):
             continue
+        for resolved in mentions(current.parent, current_text):
+            if resolved not in reachable:
+                reachable.add(resolved)
+                queue.append(next(ref for ref in reference_files if ref.resolve(strict=False) == resolved))
         for _, target in markdown_targets_outside_fences(current_text):
             clean_target = target.strip().strip("<>").split("#", 1)[0].split("?", 1)[0]
             if not clean_target or clean_target.startswith(("http://", "https://", "mailto:", "#")):
