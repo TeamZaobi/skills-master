@@ -152,6 +152,17 @@ codex_native_allowed_frontmatter_keys = ["allowed-tools", "compatibility", "desc
         categories = [item["category"] for item in payload["profiles"][0]["findings"]]
         self.assertNotIn("ordered_steps_without_completion_markers", categories)
 
+    def test_explicit_verify_step_satisfies_completion_signal(self):
+        skill_text = self.skill / "SKILL.md"
+        content = skill_text.read_text(encoding="utf-8").replace(
+            "## 1. Inspect\n\nCompletion criterion: every input is checked.\n",
+            "## Step 1: Build\n\nBuild the artifact.\n\n## Step 2: Verify\n\nInspect the rendered result.\n",
+        )
+        skill_text.write_text(content, encoding="utf-8")
+        payload = self.run_audit()
+        categories = [item["category"] for item in payload["profiles"][0]["findings"]]
+        self.assertNotIn("ordered_steps_without_completion_markers", categories)
+
     def test_reference_reachable_through_index_is_not_orphaned(self):
         reference_dir = self.skill / "references"
         reference_dir.mkdir()

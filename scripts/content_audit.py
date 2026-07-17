@@ -26,7 +26,7 @@ PROCEDURE_PARENT = re.compile(
 )
 COMPLETION_PATTERN = re.compile(
     r"completion criterion|done when|acceptance|exit criterion|\bvalidate\b|\bvalidation\b|"
-    r"\bverification\b|verification checklist|完成标准|完成条件|验收|退出条件|验证|校验|自检|检查清单|终审",
+    r"\bverify\b|\bverification\b|\breview\b|\bchecklist\b|完成标准|完成条件|验收|退出条件|验证|校验|自检|检查清单|终审",
     re.I,
 )
 NEGATION_PATTERN = re.compile(r"\bdo not\b|\bdon't\b|\bnever\b|\bmust not\b|禁止|不得|不要|切勿", re.I)
