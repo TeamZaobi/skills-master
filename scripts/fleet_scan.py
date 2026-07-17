@@ -52,6 +52,7 @@ EXCLUDED = tuple(POLICY["historical"]["exclude_path_fragments"])
 NAME_MARKERS = tuple(POLICY["historical"]["candidate_name_markers"])
 HISTORICAL_ASSETS: list[dict] = []
 HISTORICAL_BY_PATH: dict[str, dict] = {}
+ALLOWED_NAME_MISMATCHES: dict[tuple[str, str], dict] = {}
 configured_historical_assets = POLICY.get(
     "historical.asset",
     POLICY.get("historical", {}).get("asset", []),
@@ -62,6 +63,14 @@ for configured_asset in configured_historical_assets:
     record["path"] = str(resolved_path)
     HISTORICAL_ASSETS.append(record)
     HISTORICAL_BY_PATH[str(resolved_path)] = record
+
+for configured_mismatch in POLICY.get("allowed_frontmatter_name_mismatch", []):
+    record = dict(configured_mismatch)
+    repo_path = Path(record["repo"]).expanduser().resolve(strict=False)
+    source_path = (repo_path / record["path"]).resolve(strict=False)
+    record["repo"] = str(repo_path)
+    record["source_path"] = str(source_path)
+    ALLOWED_NAME_MISMATCHES[(str(repo_path), str(source_path))] = record
 
 
 def sha256(path: Path) -> str:
@@ -235,7 +244,18 @@ def add_asset(entry: Path, *, label: str, role: str, scope: str, repo: str = "",
     elif skill_exists and not fm.get("name"):
         add_finding("warning", "frontmatter_missing_name", f"Missing frontmatter name: {skill_path}", [str(skill_path)], "", finding_scope)
     elif skill_exists and role not in {"plugin_cache", "system_managed"} and fm.get("name") != entry.name:
-        add_finding("warning", "frontmatter_name_mismatch", f"Directory/name mismatch: {entry}", [str(entry)], f"frontmatter={fm.get('name')}", finding_scope)
+        allowed = ALLOWED_NAME_MISMATCHES.get((str(Path(repo).resolve(strict=False)), realpath)) if repo else None
+        if allowed and allowed.get("frontmatter_name") == fm.get("name"):
+            add_finding(
+                "info",
+                "allowed_frontmatter_name_mismatch",
+                f"Declared directory/runtime-name mapping: {entry}",
+                [str(entry)],
+                f"frontmatter={fm.get('name')}; reason={allowed.get('reason', '')}",
+                finding_scope,
+            )
+        else:
+            add_finding("warning", "frontmatter_name_mismatch", f"Directory/name mismatch: {entry}", [str(entry)], f"frontmatter={fm.get('name')}", finding_scope)
 
 
 user_roots = POLICY["scope"]["user_roots"]
@@ -492,6 +512,7 @@ RECOMMENDED_ACTIONS = {
     "frontmatter_invalid": "repair the canonical source; for plugin/system assets, report to the updater instead of editing cache",
     "frontmatter_missing_name": "add the canonical name at the editable source and rerun discovery validation",
     "frontmatter_name_mismatch": "decide whether the host slot or frontmatter name is authoritative, then align at the canonical source",
+    "allowed_frontmatter_name_mismatch": "retain the declared source-path/runtime-name mapping while its exact repo, path, and expected frontmatter name remain unchanged",
     "unregistered_or_legacy_source": "classify the asset shape and register or migrate the active source",
     "collection_root_in_discovery_surface": "expose concrete child Skills or create an explicit router; do not expose a collection root as a Skill",
     "non_skill_directory_in_discovery_surface": "classify the directory and move or remove it from the discovery surface",
@@ -510,6 +531,8 @@ def default_disposition(item: dict) -> str:
         return "allowed_scoped_duplicate"
     if category == "classified_historical_repo":
         return "retained_non_active_historical_asset"
+    if category == "allowed_frontmatter_name_mismatch":
+        return "allowed_source_slug_runtime_name_mapping"
     return "unresolved"
 
 

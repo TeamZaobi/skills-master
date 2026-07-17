@@ -156,6 +156,53 @@ evidence_file_count = 1
         self.assertEqual(summary["repos_scanned"], 0)
         self.assertEqual(inventory["historical_assets"][0]["path"], str(backup.resolve()))
 
+    def test_exact_declared_frontmatter_name_mismatch_is_info_not_warning(self):
+        project = self.projects / "hermes"
+        (project / ".git").mkdir(parents=True)
+        source = project / "skills" / "mlops" / "inference" / "vllm"
+        self.write_skill(source, "serving-llms-vllm")
+        with self.policy.open("a", encoding="utf-8") as policy:
+            policy.write(
+                f'''\n[[allowed_frontmatter_name_mismatch]]
+repo = "{project}"
+path = "skills/mlops/inference/vllm"
+frontmatter_name = "serving-llms-vllm"
+reason = "test-declared mapping"
+'''
+            )
+
+        output = self.root / "allowed-mismatch"
+        summary = self.run_scan(output)
+        ledger = json.loads((output / "finding-ledger.v1.json").read_text(encoding="utf-8"))
+        categories = [item["category"] for item in ledger["findings"]]
+
+        self.assertIn("allowed_frontmatter_name_mismatch", categories)
+        self.assertNotIn("frontmatter_name_mismatch", categories)
+        self.assertEqual(summary["severity_counts"]["warning"], 0)
+
+    def test_declared_mismatch_does_not_hide_unexpected_runtime_name(self):
+        project = self.projects / "hermes"
+        (project / ".git").mkdir(parents=True)
+        source = project / "skills" / "mlops" / "inference" / "vllm"
+        self.write_skill(source, "unexpected-vllm-name")
+        with self.policy.open("a", encoding="utf-8") as policy:
+            policy.write(
+                f'''\n[[allowed_frontmatter_name_mismatch]]
+repo = "{project}"
+path = "skills/mlops/inference/vllm"
+frontmatter_name = "serving-llms-vllm"
+reason = "test-declared mapping"
+'''
+            )
+
+        output = self.root / "unexpected-mismatch"
+        self.run_scan(output)
+        ledger = json.loads((output / "finding-ledger.v1.json").read_text(encoding="utf-8"))
+        categories = [item["category"] for item in ledger["findings"]]
+
+        self.assertIn("frontmatter_name_mismatch", categories)
+        self.assertNotIn("allowed_frontmatter_name_mismatch", categories)
+
 
 if __name__ == "__main__":
     unittest.main()
