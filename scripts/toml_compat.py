@@ -85,4 +85,3 @@ def load_toml(path):
         with path.open("rb") as handle:
             return tomllib.load(handle)
     return parse_registry_toml(path.read_text(encoding="utf-8"))
-

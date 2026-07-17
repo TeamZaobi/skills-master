@@ -50,4 +50,3 @@ reproducibility_check = "..."
 
 The doctor rejects the layout when any field is missing or the output directory
 escapes `skills/dist/`.
-
