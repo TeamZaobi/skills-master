@@ -351,6 +351,16 @@ def load_registry(repo: Path) -> dict:
             }
             for item in data.get("skill", [])
         ],
+        "sidecars": [
+            {
+                "name": item.get("name"),
+                "source_mode": item.get("source_mode", "upstream_install"),
+                "source_path": item.get("source_path", ""),
+                "upstream_commit": item.get("upstream_commit", ""),
+                "status": item.get("status", ""),
+            }
+            for item in data.get("sidecar", [])
+        ],
     }
     registries.append(record)
     return data
@@ -388,6 +398,41 @@ for repo in discovered_repos:
     registry = load_registry(repo)
     declared_owned = {item.get("source", ""): item.get("name", "") for item in registry.get("skill", [])}
     declared_consumers = {item.get("name", "") for item in registry.get("consumer_skill", [])}
+    for sidecar in registry.get("sidecar", []):
+        if sidecar.get("source_mode") != "project_local_fork":
+            continue
+        relative = sidecar.get("source_path", "")
+        source = (repo / relative).resolve(strict=False)
+        try:
+            source.relative_to(repo.resolve())
+        except ValueError:
+            add_finding(
+                "error",
+                "invalid_declared_sidecar_source",
+                f"Project-local sidecar source escapes its repository: {sidecar.get('name', '')}",
+                [str(repo / relative)],
+                "project_local_fork source_path must remain inside the declaring repository.",
+                str(repo),
+            )
+            continue
+        if not (source / "SKILL.md").is_file():
+            add_finding(
+                "error",
+                "missing_declared_sidecar_source",
+                f"Project-local sidecar source is missing: {sidecar.get('name', '')}",
+                [str(source)],
+                "The registry declares project_local_fork but the canonical SKILL.md is absent.",
+                str(repo),
+            )
+            continue
+        add_asset(
+            source,
+            label="project_sidecar_source",
+            role="repo_source",
+            scope="project",
+            repo=str(repo),
+            declared="owned_sidecar",
+        )
     for rel, (label, role) in PROJECT_LABELS.items():
         root = repo / rel
         if not root.is_dir():

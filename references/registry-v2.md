@@ -53,6 +53,25 @@ targets = ["agents", "claude"]
   projections only; it is not a fifth canonical asset shape and grants no
   write authority to the consuming repository.
 
+A sidecar installed directly from an upstream package remains installer-owned.
+When a repository deliberately forks one, declare the canonical source instead:
+
+```toml
+[[sidecar]]
+name = "example-sidecar"
+upstream = "owner/repository"
+source_mode = "project_local_fork"
+source_path = "vendor/skill-forks/owner-repository/example-sidecar"
+upstream_commit = "0123456789abcdef0123456789abcdef01234567"
+```
+
+`source_path` must stay inside the declaring repository and contain
+`SKILL.md`. Registry-driven fleet discovery treats that directory as a
+repo-owned audit source even when every host entry is a symlink. The registry,
+lock receipt, upstream commit, fork digest, projection, license, and rollback
+point must agree before adoption; the fork does not inherit authority over
+project facts merely because it is repository-owned.
+
 Generated products additionally require `build_command`, `output_dir`, and
 `reproducibility_check` on the skill entry.
 

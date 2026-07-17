@@ -258,6 +258,60 @@ reason = "test-declared mapping"
         self.assertIn("frontmatter_name_mismatch", categories)
         self.assertNotIn("allowed_frontmatter_name_mismatch", categories)
 
+    def test_project_local_fork_sidecar_is_discovered_as_repo_source(self):
+        project = self.projects / "local-fork"
+        (project / ".git").mkdir(parents=True)
+        source = project / "vendor" / "skill-forks" / "owner-repo" / "lookup"
+        self.write_skill(source, "lookup")
+        registry = project / "skills" / "registry.toml"
+        registry.parent.mkdir(parents=True)
+        registry.write_text(
+            '''version = 2
+
+[[sidecar]]
+name = "lookup"
+source_mode = "project_local_fork"
+source_path = "vendor/skill-forks/owner-repo/lookup"
+upstream_commit = "0123456789abcdef0123456789abcdef01234567"
+''',
+            encoding="utf-8",
+        )
+
+        output = self.root / "local-fork-source"
+        self.run_scan(output)
+        inventory = json.loads((output / "inventory.v1.json").read_text(encoding="utf-8"))
+        asset = next(item for item in inventory["assets"] if item["entry_path"] == str(source.resolve()))
+
+        self.assertEqual(asset["role"], "repo_source")
+        self.assertEqual(asset["discovery_label"], "project_sidecar_source")
+        self.assertEqual(asset["declared"], "owned_sidecar")
+
+    def test_project_local_fork_source_must_not_escape_repo(self):
+        project = self.projects / "escaping-fork"
+        (project / ".git").mkdir(parents=True)
+        outside = self.projects / "outside-skill"
+        self.write_skill(outside, "outside-skill")
+        registry = project / "skills" / "registry.toml"
+        registry.parent.mkdir(parents=True)
+        registry.write_text(
+            '''version = 2
+
+[[sidecar]]
+name = "outside-skill"
+source_mode = "project_local_fork"
+source_path = "../outside-skill"
+upstream_commit = "0123456789abcdef0123456789abcdef01234567"
+''',
+            encoding="utf-8",
+        )
+
+        output = self.root / "escaping-fork-source"
+        self.run_scan(output)
+        ledger = json.loads((output / "finding-ledger.v1.json").read_text(encoding="utf-8"))
+        categories = [item["category"] for item in ledger["findings"]]
+
+        self.assertIn("invalid_declared_sidecar_source", categories)
+
     def test_long_frontmatter_closing_delimiter_after_line_200_is_parseable(self):
         source = self.user_agents / "long-metadata"
         source.mkdir(parents=True)

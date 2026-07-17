@@ -81,6 +81,20 @@ local_rewrite = "prohibited_without_upstream_or_fork"
 source_url = ""
 pinned_commit = ""
 
+[[content_source_contract]]
+id = "blackfactory-scientific-sidecar-local-fork-v1"
+path = "~/Agents/BlackFactory/vendor/skill-forks/claude-code-templates"
+class = "declared_local_fork_checkout"
+mutation_owner = "blackfactory_project_owner"
+local_rewrite = "allowed_after_evidence"
+source_url = "https://github.com/davila7/claude-code-templates.git"
+pinned_commit = "c82a7b64f99016422d18f0fdc9f64b43f66a81aa"
+snapshot_commit = "06f8e06e7c5619eee3e96624a46dc0edb63e64ea"
+upstream_base_commit = "b92a9010c6530ee9a89311b3d1720afb71329f68"
+branch = "main"
+skills = ["citation-management", "research-lookup"]
+push_remote = ""
+
 [[installer_command_contract]]
 id = "skills-cli-check-mutates-v1"
 command = "npx skills check"
