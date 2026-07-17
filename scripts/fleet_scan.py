@@ -361,6 +361,22 @@ def load_registry(repo: Path) -> dict:
             }
             for item in data.get("sidecar", [])
         ],
+        "retired_sidecars": [
+            {
+                "name": item.get("name"),
+                "upstream": item.get("upstream", ""),
+                "retired_at": item.get("retired_at", ""),
+                "retired_from_commit": item.get("retired_from_commit", ""),
+                "replacement_owner": item.get("replacement_owner", ""),
+                "reason": item.get("reason", ""),
+                "rollback_ref": item.get("rollback_ref", ""),
+                "eval_case": item.get("eval_case", ""),
+                "computed_hash": item.get("computed_hash", ""),
+                "normalized_hash": item.get("normalized_hash", ""),
+                "body_hash": item.get("body_hash", ""),
+            }
+            for item in data.get("retired_sidecar", [])
+        ],
     }
     registries.append(record)
     return data
@@ -398,6 +414,24 @@ for repo in discovered_repos:
     registry = load_registry(repo)
     declared_owned = {item.get("source", ""): item.get("name", "") for item in registry.get("skill", [])}
     declared_consumers = {item.get("name", "") for item in registry.get("consumer_skill", [])}
+    retired_sidecars = registry.get("retired_sidecar", [])
+    retired_names = {item.get("name", "") for item in retired_sidecars if item.get("name")}
+    for retired in retired_sidecars:
+        add_finding(
+            "info",
+            "declared_retired_sidecar",
+            f"Declared retired sidecar: {retired.get('name', '')}",
+            [str(repo / "skills" / "registry.toml")],
+            json.dumps({
+                "upstream": retired.get("upstream", ""),
+                "retired_at": retired.get("retired_at", ""),
+                "retired_from_commit": retired.get("retired_from_commit", ""),
+                "replacement_owner": retired.get("replacement_owner", ""),
+                "rollback_ref": retired.get("rollback_ref", ""),
+                "eval_case": retired.get("eval_case", ""),
+            }, ensure_ascii=False, sort_keys=True),
+            str(repo),
+        )
     for sidecar in registry.get("sidecar", []):
         if sidecar.get("source_mode") != "project_local_fork":
             continue
@@ -444,6 +478,15 @@ for repo in discovered_repos:
         for child in children:
             if child.name in {".DS_Store", "Icon", "Icon\r"}:
                 continue
+            if child.name in retired_names:
+                add_finding(
+                    "error",
+                    "retired_sidecar_projection_present",
+                    f"Retired sidecar remains in project discovery: {child}",
+                    [str(child), str(repo / "skills" / "registry.toml")],
+                    "Remove the live projection or reverse the retirement through an explicit registry change.",
+                    str(repo),
+                )
             declared = "consumer" if child.name in declared_consumers else ""
             add_asset(child, label=label, role=role, scope="project", repo=str(repo), declared=declared)
 

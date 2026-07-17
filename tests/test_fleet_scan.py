@@ -312,6 +312,47 @@ upstream_commit = "0123456789abcdef0123456789abcdef01234567"
 
         self.assertIn("invalid_declared_sidecar_source", categories)
 
+    def test_retired_sidecar_remains_in_inventory_and_cannot_reappear_in_discovery(self):
+        project = self.projects / "retired-sidecar"
+        (project / ".git").mkdir(parents=True)
+        registry = project / "skills" / "registry.toml"
+        registry.parent.mkdir(parents=True)
+        registry.write_text(
+            '''version = 2
+
+[[retired_sidecar]]
+name = "research"
+upstream = "owner/repo"
+retired_at = "2026-07-17"
+retired_from_commit = "0123456789abcdef0123456789abcdef01234567"
+replacement_owner = "lind"
+reason = "No active consumer and required dependencies are absent."
+rollback_ref = "governance/rollback/research"
+eval_case = "retired-research-near-miss"
+computed_hash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+normalized_hash = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+body_hash = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+''',
+            encoding="utf-8",
+        )
+
+        clean_output = self.root / "retired-sidecar-clean"
+        self.run_scan(clean_output)
+        inventory = json.loads((clean_output / "inventory.v1.json").read_text(encoding="utf-8"))
+        record = next(item for item in inventory["registries"] if item["repo"] == str(project))
+        self.assertEqual(record["retired_sidecars"][0]["name"], "research")
+        clean_ledger = json.loads((clean_output / "finding-ledger.v1.json").read_text(encoding="utf-8"))
+        clean_categories = [item["category"] for item in clean_ledger["findings"]]
+        self.assertIn("declared_retired_sidecar", clean_categories)
+        self.assertNotIn("retired_sidecar_projection_present", clean_categories)
+
+        self.write_skill(project / ".agents" / "skills" / "research", "research")
+        dirty_output = self.root / "retired-sidecar-resurrected"
+        self.run_scan(dirty_output)
+        dirty_ledger = json.loads((dirty_output / "finding-ledger.v1.json").read_text(encoding="utf-8"))
+        retired = next(item for item in dirty_ledger["findings"] if item["category"] == "retired_sidecar_projection_present")
+        self.assertEqual(retired["severity"], "error")
+
     def test_long_frontmatter_closing_delimiter_after_line_200_is_parseable(self):
         source = self.user_agents / "long-metadata"
         source.mkdir(parents=True)
