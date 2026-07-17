@@ -1,4 +1,5 @@
 import json
+import hashlib
 import os
 import subprocess
 import sys
@@ -61,7 +62,7 @@ resolution = "parallel_or_host_defined"
         path.mkdir(parents=True, exist_ok=True)
         (path / "SKILL.md").write_text(SKILL_BODY.format(name=name), encoding="utf-8")
 
-    def run_scan(self, output, previous=None):
+    def run_scan(self, output, previous=None, registry_receipt=None):
         command = [
             sys.executable,
             "scripts/fleet_scan.py",
@@ -72,6 +73,8 @@ resolution = "parallel_or_host_defined"
         ]
         if previous:
             command.extend(["--previous-ledger", str(previous)])
+        if registry_receipt:
+            command.extend(["--registry-receipt", str(registry_receipt)])
         env = dict(os.environ)
         env["PYTHONPYCACHEPREFIX"] = str(self.root / "pycache")
         result = subprocess.run(
@@ -125,6 +128,58 @@ resolution = "parallel_or_host_defined"
         self.assertEqual(next_finding["finding_id"], original_id)
         self.assertEqual(next_finding["owner"], "user")
         self.assertEqual(next_finding["disposition"], "relink_to_canonical")
+
+    def test_terminal_previous_finding_is_observed_but_not_counted_open(self):
+        dangling = self.user_codex / "accepted-missing"
+        dangling.symlink_to("../../.agents/skills/accepted-missing")
+        first = self.root / "terminal-first"
+        self.run_scan(first)
+        payload = json.loads((first / "finding-ledger.v1.json").read_text(encoding="utf-8"))
+        finding = next(item for item in payload["findings"] if item["category"] == "dangling_projection")
+        finding["status"] = "accepted"
+        reviewed = self.root / "terminal-reviewed.json"
+        reviewed.write_text(json.dumps(payload), encoding="utf-8")
+
+        second = self.root / "terminal-second"
+        summary = self.run_scan(second, reviewed)
+
+        self.assertEqual(summary["severity_counts"]["error"], 1)
+        self.assertEqual(summary["open_severity_counts"]["error"], 0)
+        self.assertEqual(summary["four_clean"]["runtime_discovery_clean"]["status"], "clean")
+        self.assertEqual(summary["four_clean"]["inventory_clean"]["status"], "clean")
+
+    def test_registry_clean_receipt_is_bound_to_registry_and_doctor_digests(self):
+        project = self.projects / "registry-project"
+        (project / ".git").mkdir(parents=True)
+        registry = project / "skills" / "registry.toml"
+        registry.parent.mkdir(parents=True)
+        registry.write_text("version = 2\n", encoding="utf-8")
+        doctor = Path(__file__).resolve().parent.parent / "scripts" / "doctor.py"
+        digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+        receipt = self.root / "registry-receipt.json"
+        receipt.write_text(json.dumps({
+            "schema": "fleet-registry-doctor-receipt.v1",
+            "doctor": str(doctor),
+            "doctor_sha256": digest(doctor),
+            "executed_at": "2026-01-01T00:00:00Z",
+            "results": [{
+                "repo": str(project),
+                "registry_sha256": digest(registry),
+                "exit_code": 0,
+                "errors": 0,
+            }],
+        }), encoding="utf-8")
+
+        first = self.root / "registry-proof-first"
+        clean = self.run_scan(first, registry_receipt=receipt)
+        self.assertEqual(clean["four_clean"]["registry_clean"]["status"], "clean")
+
+        registry.write_text("version = 2\nowner = \"changed\"\n", encoding="utf-8")
+        second = self.root / "registry-proof-stale"
+        stale = self.run_scan(second, registry_receipt=receipt)
+        proof = stale["four_clean"]["registry_clean"]
+        self.assertEqual(proof["status"], "not_clean")
+        self.assertEqual(proof["stale_registry_receipts"], [str(project.resolve())])
 
     def test_explicit_non_active_historical_repo_is_retained_without_surface_warnings(self):
         backup = self.projects / "example-backup"
@@ -225,6 +280,28 @@ reason = "test-declared mapping"
 
         self.assertNotIn("frontmatter_invalid", categories)
         self.assertNotIn("frontmatter_missing_name", categories)
+
+    def test_block_description_is_flattened_for_inventory(self):
+        source = self.user_agents / "block-description"
+        source.mkdir(parents=True)
+        (source / "SKILL.md").write_text(
+            "---\n"
+            "name: block-description\n"
+            "description: |\n"
+            "  Use when testing\n"
+            "  a multiline description.\n"
+            "metadata:\n"
+            "  owner: test\n"
+            "---\n",
+            encoding="utf-8",
+        )
+
+        output = self.root / "block-description"
+        self.run_scan(output)
+        inventory = json.loads((output / "inventory.v1.json").read_text(encoding="utf-8"))
+        asset = next(item for item in inventory["assets"] if item["name"] == "block-description")
+
+        self.assertEqual(asset["frontmatter"]["description"], "Use when testing a multiline description.")
 
 
 if __name__ == "__main__":

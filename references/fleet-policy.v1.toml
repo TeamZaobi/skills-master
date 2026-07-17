@@ -21,11 +21,67 @@ plugin_cache = "host_managed_plugin_cache"
 cross_project_same_name = "legal_unless_shared_host_scope_or_declared_consumer_conflicts"
 historical_default = "classify_before_excluding_or_deleting"
 
+[content_audit]
+skill_lock = "~/.agents/.skill-lock.json"
+codex_native_allowed_frontmatter_keys = ["allowed-tools", "compatibility", "description", "license", "metadata", "name"]
+locked_install_extensions_are_upstream_owned = true
+
+[[frontmatter_contract]]
+id = "hermes-native-v1"
+repo = "~/Agents/hermes-muniu"
+extensions = ["author", "category", "platforms", "tags", "version"]
+authority = "~/Agents/hermes-muniu/AGENTS.md#skillmd-frontmatter"
+disposition = "repo_product_contract"
+
 [[allowed_frontmatter_name_mismatch]]
 repo = "~/Agents/hermes-muniu"
 path = "skills/mlops/evaluation/lm-evaluation-harness"
 frontmatter_name = "evaluating-llms-harness"
 reason = "Hermes intentionally keeps the bundled dependency/product slug as the source path while exposing a distinct runtime invocation name; the catalog and sync tests assert both identifiers."
+
+[[content_tier_a]]
+path = "~/.agents/skills/skills-master"
+reason = "Fleet lifecycle control plane and meta Skill."
+
+[[content_tier_a]]
+path = "~/.agents/skills/writing-great-skills"
+reason = "Static predictability rubric used to govern every other Skill."
+
+[[content_tier_a]]
+path = "~/.agents/skills/skillopt-sleep"
+reason = "Evidence-driven optimizer that can propose changes to other Skills."
+
+[[content_tier_a]]
+path = "~/Agents/CliRouter/skills/CliRouter"
+reason = "Cross-host provider dispatcher with external execution and model-budget effects."
+
+[[content_tier_a]]
+path = "~/.agents/skills/files-driven"
+reason = "Cross-project structure governance method used to identify project truth and closure boundaries."
+
+[[content_tier_a]]
+path = "~/.agents/skills/product-engineer"
+reason = "Cross-project product and engineering decision surface."
+
+[[content_tier_a]]
+path = "~/Agents/BlackFactory/skills/blackfactory"
+reason = "Project control Skill for a Skill-intensive downstream product."
+
+[[content_tier_a]]
+path = "~/Agents/BlackFactory/skills/lind"
+reason = "Shared canonical Skill consumed across BlackFactory and OxNCourser project scopes."
+
+[[content_tier_a]]
+path = "~/.agents/skills/bailian-cli"
+reason = "Default high-priority external CLI execution surface."
+
+[[content_tier_a]]
+path = "~/.agents/skills/openclaw-terminal"
+reason = "External terminal-control surface with system mutation potential."
+
+[[content_tier_a]]
+path = "~/.agents/skills/hermes-agent-terminal"
+reason = "External terminal-control surface with system mutation potential."
 
 [[allowed_frontmatter_name_mismatch]]
 repo = "~/Agents/hermes-muniu"

@@ -34,6 +34,10 @@ def parse_args() -> argparse.Namespace:
         "--previous-ledger",
         help="Optional previous ledger whose owner, status, and disposition are carried by fingerprint",
     )
+    parser.add_argument(
+        "--registry-receipt",
+        help="Optional fresh fleet-registry-doctor-receipt.v1 JSON used to prove registry_clean",
+    )
     parser.add_argument("--no-write", action="store_true", help="Print summary without writing receipts")
     return parser.parse_args()
 
@@ -108,14 +112,32 @@ def frontmatter(path: Path) -> dict:
     except StopIteration:
         return result
     result["parseable"] = True
-    for line in lines[1:end]:
+    frontmatter_lines = lines[1:end]
+    index = 0
+    while index < len(frontmatter_lines):
+        line = frontmatter_lines[index]
         match = re.match(r"^([A-Za-z0-9_-]+):\s*(.*)$", line)
         if not match:
+            index += 1
             continue
         key, value = match.groups()
         value = value.strip().strip('"').strip("'")
         if key in {"name", "description"}:
+            if key == "description" and value in {"|", ">", "|-", ">-", "|+", ">+"}:
+                chunks: list[str] = []
+                index += 1
+                while index < len(frontmatter_lines):
+                    continuation = frontmatter_lines[index]
+                    if continuation and not continuation[0].isspace():
+                        break
+                    stripped = continuation.strip()
+                    if stripped:
+                        chunks.append(stripped)
+                    index += 1
+                result[key] = " ".join(chunks)
+                continue
             result[key] = value
+        index += 1
     return result
 
 
@@ -313,11 +335,22 @@ def load_registry(repo: Path) -> dict:
     record = {
         "repo": str(repo),
         "path": str(path),
+        "registry_sha256": sha256(path),
         "version": data.get("version"),
         "layout": data.get("layout"),
         "canonical_dir": data.get("canonical_dir"),
         "owned": [item.get("name") for item in data.get("skill", [])],
         "consumers": [item.get("name") for item in data.get("consumer_skill", [])],
+        "skills": [
+            {
+                "name": item.get("name"),
+                "source": item.get("source"),
+                "status": item.get("status"),
+                "targets": item.get("targets", []),
+                "origin": item.get("origin"),
+            }
+            for item in data.get("skill", [])
+        ],
     }
     registries.append(record)
     return data
@@ -453,37 +486,6 @@ for finding in findings:
 findings = list(deduplicated.values())
 
 
-severity_counts = Counter(item["severity"] for item in findings)
-category_counts = Counter(item["category"] for item in findings)
-scope_counts = Counter(item["scope"] for item in assets)
-role_counts = Counter(item["role"] for item in assets)
-runtime_error_categories = {"dangling_projection", "projection_chain", "projection_target_without_skill", "parallel_host_collision"}
-runtime_errors = sum(1 for item in findings if item["severity"] == "error" and item["category"] in runtime_error_categories)
-inventory_open = sum(1 for item in findings if item["severity"] in {"error", "warning"})
-summary = {
-    "generated_at": datetime.now(timezone.utc).isoformat(),
-    "policy": str(POLICY_PATH),
-    "read_only": True,
-    "repos_discovered": len(discovered_repos),
-    "repos_scanned": len(repos),
-    "historical_assets_classified": len(HISTORICAL_ASSETS),
-    "registries_found": len(registries),
-    "assets": len(assets),
-    "unique_names": len({a["name"] for a in assets if a["skill_md"]}),
-    "unique_realpaths": len({a["realpath"] for a in assets if a["skill_md"]}),
-    "scope_counts": dict(sorted(scope_counts.items())),
-    "role_counts": dict(sorted(role_counts.items())),
-    "severity_counts": {key: severity_counts.get(key, 0) for key in ("error", "warning", "info")},
-    "category_counts": dict(sorted(category_counts.items())),
-    "four_clean": {
-        "registry_clean": {"status": "not_fleetwide_proven", "registries_found": len(registries)},
-        "runtime_discovery_clean": {"status": "clean" if runtime_errors == 0 else "not_clean", "open_errors": runtime_errors},
-        "inventory_clean": {"status": "clean" if inventory_open == 0 else "not_clean", "open_error_or_warning": inventory_open},
-        "content_predictability_clean": {"status": "not_fleetwide_assessed"},
-    },
-}
-
-
 def default_owner(item: dict) -> str:
     scope = item.get("scope", "")
     if scope == "user":
@@ -568,6 +570,115 @@ for item in sorted(findings, key=lambda x: ({"error": 0, "warning": 1, "info": 2
         "rollback_requirement": "record original path, link target, digest, and owner-approved restore action before mutation",
         "requires_fresh_proof": item["severity"] != "info",
     })
+
+
+TERMINAL_FINDING_STATUSES = {
+    "accepted",
+    "closed",
+    "false_positive",
+    "remediated",
+    "resolved",
+    "retired",
+    "superseded",
+}
+severity_counts = Counter(item["severity"] for item in ledger)
+category_counts = Counter(item["category"] for item in ledger)
+open_findings = [
+    item for item in ledger
+    if item["severity"] in {"error", "warning"}
+    and item.get("status", "open").lower() not in TERMINAL_FINDING_STATUSES
+]
+open_severity_counts = Counter(item["severity"] for item in open_findings)
+open_category_counts = Counter(item["category"] for item in open_findings)
+scope_counts = Counter(item["scope"] for item in assets)
+role_counts = Counter(item["role"] for item in assets)
+runtime_error_categories = {"dangling_projection", "projection_chain", "projection_target_without_skill", "parallel_host_collision"}
+runtime_errors = sum(
+    1 for item in open_findings
+    if item["severity"] == "error" and item["category"] in runtime_error_categories
+)
+inventory_open = len(open_findings)
+
+
+def registry_clean_proof() -> dict:
+    base = {"status": "not_fleetwide_proven", "registries_found": len(registries)}
+    if not ARGS.registry_receipt:
+        return base
+    receipt_path = Path(ARGS.registry_receipt).expanduser().resolve()
+    base["receipt"] = str(receipt_path)
+    try:
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        base["proof_error"] = str(exc)
+        return base
+    if receipt.get("schema") != "fleet-registry-doctor-receipt.v1":
+        base["proof_error"] = "unexpected receipt schema"
+        return base
+    expected = {str(Path(item["repo"]).resolve(strict=False)) for item in registries}
+    expected_registry_digests = {
+        str(Path(item["repo"]).resolve(strict=False)): item.get("registry_sha256", "")
+        for item in registries
+    }
+    results = receipt.get("results", [])
+    proven = {
+        str(Path(item.get("repo", "")).expanduser().resolve(strict=False)): item
+        for item in results
+        if item.get("repo")
+    }
+    missing = sorted(expected - set(proven))
+    extra = sorted(set(proven) - expected)
+    failed = sorted(
+        repo for repo in expected & set(proven)
+        if proven[repo].get("exit_code") != 0 or proven[repo].get("errors", 0) != 0
+    )
+    stale = sorted(
+        repo for repo in expected & set(proven)
+        if proven[repo].get("registry_sha256") != expected_registry_digests.get(repo)
+    )
+    doctor_path = Path(receipt.get("doctor", "")).expanduser().resolve(strict=False)
+    doctor_digest_matches = bool(
+        doctor_path.is_file()
+        and receipt.get("doctor_sha256")
+        and receipt.get("doctor_sha256") == sha256(doctor_path)
+    )
+    base.update({
+        "status": "clean" if not missing and not failed and not stale and doctor_digest_matches else "not_clean",
+        "registries_tested": len(expected & set(proven)),
+        "missing_repos": missing,
+        "extra_repos": extra,
+        "failed_repos": failed,
+        "stale_registry_receipts": stale,
+        "doctor_digest_matches": doctor_digest_matches,
+        "executed_at": receipt.get("executed_at", ""),
+    })
+    return base
+
+
+summary = {
+    "generated_at": datetime.now(timezone.utc).isoformat(),
+    "policy": str(POLICY_PATH),
+    "read_only": True,
+    "repos_discovered": len(discovered_repos),
+    "repos_scanned": len(repos),
+    "historical_assets_classified": len(HISTORICAL_ASSETS),
+    "registries_found": len(registries),
+    "assets": len(assets),
+    "unique_names": len({a["name"] for a in assets if a["skill_md"]}),
+    "unique_realpaths": len({a["realpath"] for a in assets if a["skill_md"]}),
+    "scope_counts": dict(sorted(scope_counts.items())),
+    "role_counts": dict(sorted(role_counts.items())),
+    "severity_counts": {key: severity_counts.get(key, 0) for key in ("error", "warning", "info")},
+    "open_severity_counts": {key: open_severity_counts.get(key, 0) for key in ("error", "warning")},
+    "category_counts": dict(sorted(category_counts.items())),
+    "open_category_counts": dict(sorted(open_category_counts.items())),
+    "terminal_finding_statuses": sorted(TERMINAL_FINDING_STATUSES),
+    "four_clean": {
+        "registry_clean": registry_clean_proof(),
+        "runtime_discovery_clean": {"status": "clean" if runtime_errors == 0 else "not_clean", "open_errors": runtime_errors},
+        "inventory_clean": {"status": "clean" if inventory_open == 0 else "not_clean", "open_error_or_warning": inventory_open},
+        "content_predictability_clean": {"status": "not_fleetwide_assessed"},
+    },
+}
 
 if not ARGS.no_write:
     OUT.mkdir(parents=True, exist_ok=True)
