@@ -126,6 +126,36 @@ resolution = "parallel_or_host_defined"
         self.assertEqual(next_finding["owner"], "user")
         self.assertEqual(next_finding["disposition"], "relink_to_canonical")
 
+    def test_explicit_non_active_historical_repo_is_retained_without_surface_warnings(self):
+        backup = self.projects / "example-backup"
+        (backup / ".git").mkdir(parents=True)
+        self.write_skill(backup / ".codex" / "skills" / "legacy", "legacy")
+        with self.policy.open("a", encoding="utf-8") as policy:
+            policy.write(
+                f'''\n[[historical.asset]]
+path = "{backup}"
+classification = "recovery_working_copy"
+active = false
+scan_project_surfaces = false
+retention = "retain_until_manual_reconciliation"
+evidence_digest_sha256 = "test-digest"
+evidence_file_count = 1
+'''
+            )
+
+        output = self.root / "historical"
+        summary = self.run_scan(output)
+        ledger = json.loads((output / "finding-ledger.v1.json").read_text(encoding="utf-8"))
+        inventory = json.loads((output / "inventory.v1.json").read_text(encoding="utf-8"))
+        categories = [item["category"] for item in ledger["findings"]]
+
+        self.assertIn("classified_historical_repo", categories)
+        self.assertNotIn("candidate_historical_repo", categories)
+        self.assertNotIn("legacy_project_codex_surface", categories)
+        self.assertEqual(summary["repos_discovered"], 1)
+        self.assertEqual(summary["repos_scanned"], 0)
+        self.assertEqual(inventory["historical_assets"][0]["path"], str(backup.resolve()))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -35,6 +35,28 @@ projection_must_be_one_hop = true
 exclude_path_fragments = ["/docs/dev-records/", "/evidence/", "/archive/", "/outputs/", "/snapshots/", "/node_modules/", "/.git/"]
 candidate_name_markers = ["backup", "副本", ".wt-"]
 
+[[historical.asset]]
+path = "~/Agents/AIJournal_副本"
+classification = "recovery_working_copy"
+active = false
+scan_project_surfaces = false
+retention = "retain_until_manual_reconciliation"
+evidence_digest_sha256 = "5d864e7d36dc7d9fccd1be83fe48adca54378b39e0b592d4adfc249842656b19"
+evidence_file_count = 235
+evidence_at = "2026-07-17T17:22:00+08:00"
+reason = "HEAD b191a23 is contained by active AIJournal, but the copy retains 50 tracked modifications and 41 untracked entries including material absent from the active worktree."
+
+[[historical.asset]]
+path = "~/Agents/DMClaw.entity-backup-20260317-125819"
+classification = "immutable_recovery_backup"
+active = false
+scan_project_surfaces = false
+retention = "retain_until_owner_archive_or_delete_decision"
+evidence_digest_sha256 = "ac184f691d22a5a45db138c1bdc9085f08a55bcc5463fe407da7fe421e66dce8"
+evidence_file_count = 246
+evidence_at = "2026-07-17T17:22:00+08:00"
+reason = "The repository has no commits and contains 22 untracked top-level recovery entries; it is not an active project source and must not be silently deleted."
+
 [[hosts]]
 name = "codex"
 user_roots = ["user_agents", "user_codex"]

@@ -50,6 +50,18 @@ def load_policy() -> dict:
 POLICY = load_policy()
 EXCLUDED = tuple(POLICY["historical"]["exclude_path_fragments"])
 NAME_MARKERS = tuple(POLICY["historical"]["candidate_name_markers"])
+HISTORICAL_ASSETS: list[dict] = []
+HISTORICAL_BY_PATH: dict[str, dict] = {}
+configured_historical_assets = POLICY.get(
+    "historical.asset",
+    POLICY.get("historical", {}).get("asset", []),
+)
+for configured_asset in configured_historical_assets:
+    record = dict(configured_asset)
+    resolved_path = Path(record["path"]).expanduser().resolve(strict=False)
+    record["path"] = str(resolved_path)
+    HISTORICAL_ASSETS.append(record)
+    HISTORICAL_BY_PATH[str(resolved_path)] = record
 
 
 def sha256(path: Path) -> str:
@@ -295,7 +307,8 @@ repos = repo_roots(Path(POLICY["scope"]["project_root"]).expanduser(), int(POLIC
 skills_master = SKILLS_MASTER_ROOT
 if POLICY["scope"].get("include_skills_master_repo", True) and (skills_master / ".git").exists():
     repos.append(skills_master)
-repos = sorted(set(repos))
+discovered_repos = sorted(set(repos))
+repos = []
 
 PROJECT_LABELS = {
     ".agents/skills": ("project_agents", "project_native_or_projection"),
@@ -305,7 +318,20 @@ PROJECT_LABELS = {
 }
 
 
-for repo in repos:
+for repo in discovered_repos:
+    historical = HISTORICAL_BY_PATH.get(str(repo.resolve(strict=False)))
+    if historical:
+        add_finding(
+            "info",
+            "classified_historical_repo",
+            f"Classified non-active repository: {repo}",
+            [str(repo)],
+            json.dumps(historical, ensure_ascii=False, sort_keys=True),
+            str(repo),
+        )
+        if not historical.get("scan_project_surfaces", historical.get("active", False)):
+            continue
+    repos.append(repo)
     registry = load_registry(repo)
     declared_owned = {item.get("source", ""): item.get("name", "") for item in registry.get("skill", [])}
     declared_consumers = {item.get("name", "") for item in registry.get("consumer_skill", [])}
@@ -387,7 +413,7 @@ for name, by_repo in sorted(project_sources.items()):
 
 
 for repo in repos:
-    if candidate_historical(repo):
+    if candidate_historical(repo) and str(repo.resolve(strict=False)) not in HISTORICAL_BY_PATH:
         add_finding("warning", "candidate_historical_repo", f"Repository needs historical/active classification: {repo}", [str(repo)], "Do not silently exclude or delete.", str(repo))
 
 
@@ -418,7 +444,9 @@ summary = {
     "generated_at": datetime.now(timezone.utc).isoformat(),
     "policy": str(POLICY_PATH),
     "read_only": True,
+    "repos_discovered": len(discovered_repos),
     "repos_scanned": len(repos),
+    "historical_assets_classified": len(HISTORICAL_ASSETS),
     "registries_found": len(registries),
     "assets": len(assets),
     "unique_names": len({a["name"] for a in assets if a["skill_md"]}),
@@ -458,6 +486,7 @@ RECOMMENDED_ACTIONS = {
     "parallel_host_collision": "select one canonical realpath for the host scope and remove the competing discovery path",
     "ordered_host_shadow": "make host precedence intentional and ensure every duplicate resolves to the same canonical realpath",
     "candidate_historical_repo": "classify active, immutable historical, recovery backup, or removable before exclusion",
+    "classified_historical_repo": "retain according to the recorded classification and require a new owner decision before reactivation, relocation, or deletion",
     "legacy_project_codex_surface": "prove primary discovery in a fresh session, then declare or retire the compatibility entry",
     "real_directory_in_projection_surface": "reconcile edits into the canonical source, then replace the directory with a direct projection",
     "frontmatter_invalid": "repair the canonical source; for plugin/system assets, report to the updater instead of editing cache",
@@ -479,6 +508,8 @@ def default_disposition(item: dict) -> str:
         return "read_only_host_managed"
     if category == "legal_cross_project_same_name":
         return "allowed_scoped_duplicate"
+    if category == "classified_historical_repo":
+        return "retained_non_active_historical_asset"
     return "unresolved"
 
 
@@ -517,7 +548,7 @@ for item in sorted(findings, key=lambda x: ({"error": 0, "warning": 1, "info": 2
 
 if not ARGS.no_write:
     OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / "inventory.v1.json").write_text(json.dumps({"summary": summary, "registries": registries, "assets": assets}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    (OUT / "inventory.v1.json").write_text(json.dumps({"summary": summary, "historical_assets": HISTORICAL_ASSETS, "registries": registries, "assets": assets}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     (OUT / "finding-ledger.v1.json").write_text(json.dumps({"summary": summary, "findings": ledger}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     (OUT / "summary.v1.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 print(json.dumps(summary, ensure_ascii=False, indent=2))
