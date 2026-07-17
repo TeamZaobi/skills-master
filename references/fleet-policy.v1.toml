@@ -90,6 +90,24 @@ observed_effect = "Updated five live global Skills and their lock entries; the c
 required_controls = ["snapshot_live_lock_and_skill_digests", "run_against_an_isolated_home_first", "review_source_and_capability_delta", "rerun_fleet_cycle_before_acceptance"]
 prohibited_assumption = "Do not infer read-only behavior from the check subcommand name or help text."
 
+[[installer_command_contract]]
+id = "skills-cli-add-source-help-mutates-v1"
+command = "npx skills add <source> --help"
+classification = "mutating"
+observed_at = "2026-07-17T13:25:00Z"
+observed_effect = "Treated the source plus --help invocation as an install request and copied every discovered Skill into the isolated staging root."
+required_controls = ["never_append_help_to_a_source_install_command", "use_command_level_help_without_a_source", "run_source_discovery_in_an_isolated_home_and_workdir", "delete_accidental_staging_after_receipt"]
+prohibited_assumption = "Do not assume --help short-circuits parsing after a source argument."
+
+[[installer_command_contract]]
+id = "skills-cli-add-skill-selector-v1"
+command = "npx skills add <source> --skill <name> [<name> ...]"
+classification = "bounded_mutating"
+observed_at = "2026-07-17T13:39:59Z"
+observed_effect = "A source exposing 27 Skills wrote only the selected lark-whiteboard Skill and updated its lock timestamp; five other reviewed candidates and the new lark-note remained untouched."
+required_controls = ["snapshot_live_lock_and_selected_and_nearby_skill_digests", "stage_the_exact_selector_in_an_isolated_home_first", "review_source_capability_and_security_delta", "retain_a_durable_rollback_copy", "verify_nonselected_skills_and_projections_unchanged", "rerun_fleet_cycle_before_acceptance"]
+prohibited_assumption = "Discovery cardinality is not the mutation cardinality; verify the installation summary and post-state independently."
+
 [[frontmatter_contract]]
 id = "hermes-native-v1"
 repo = "~/Agents/hermes-muniu"
