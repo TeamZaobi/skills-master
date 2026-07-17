@@ -80,7 +80,8 @@ inside the intended boundary.
 - Fleet-wide inventory, owner/disposition tracking, and cleanup waves:
   [`references/fleet-policy.v1.toml`](references/fleet-policy.v1.toml) with
   `scripts/fleet_scan.py`; use `scripts/content_audit.py` for Tier A/B static
-  predictability profiles after inventory is structurally clean.
+  predictability profiles after inventory is structurally clean, or
+  `scripts/fleet_cycle.py` to run the full non-model evidence cycle.
 - Skill/agent content placement:
   [`references/structure-boundaries.md`](references/structure-boundaries.md)
 - Multi-skill ownership and handoff:
