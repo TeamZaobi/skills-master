@@ -198,6 +198,46 @@ codex_native_allowed_frontmatter_keys = ["allowed-tools", "compatibility", "desc
         profile = payload["profiles"][0]
         self.assertEqual(profile["metrics"]["orphaned_reference_files"], [])
 
+    def test_cross_skill_consumer_pointer_discloses_shared_reference(self):
+        shared = self.root / "shared"
+        shared_reference = shared / "references" / "routing.md"
+        shared_reference.parent.mkdir(parents=True)
+        (shared / "SKILL.md").write_text(
+            "---\nname: shared\ndescription: Use when handling shared setup.\n---\n\n# Shared\n",
+            encoding="utf-8",
+        )
+        shared_reference.write_text("# Routing\n", encoding="utf-8")
+        consumer = self.root / "consumer"
+        consumer.mkdir()
+        (consumer / "SKILL.md").write_text(
+            "---\nname: consumer\ndescription: Use when routing a consumer.\n---\n\n"
+            "When routing, read [the shared rule](../shared/references/routing.md).\n",
+            encoding="utf-8",
+        )
+        inventory = json.loads(self.inventory.read_text(encoding="utf-8"))
+        inventory["assets"].extend([
+            {
+                "name": "shared", "realpath": str(shared), "skill_md": str(shared / "SKILL.md"),
+                "skill_sha256": "shared-digest", "role": "user_canonical", "entry_type": "real_dir",
+                "frontmatter": {"description": "Use when handling shared setup."},
+            },
+            {
+                "name": "consumer", "realpath": str(consumer), "skill_md": str(consumer / "SKILL.md"),
+                "skill_sha256": "consumer-digest", "role": "user_canonical", "entry_type": "real_dir",
+                "frontmatter": {"description": "Use when routing a consumer."},
+            },
+        ])
+        self.inventory.write_text(json.dumps(inventory), encoding="utf-8")
+
+        payload = self.run_audit()
+        profile = next(item for item in payload["profiles"] if item["name"] == "shared")
+        self.assertEqual(profile["metrics"]["orphaned_reference_files"], [])
+        observation = next(
+            item for item in profile["observations"]
+            if item["category"] == "consumer_disclosed_reference_file"
+        )
+        self.assertEqual(observation["values"], ["references/routing.md"])
+
     def test_project_native_real_directory_is_audited_and_extension_is_owner_finding(self):
         payload = self.run_audit()
         profile = next(item for item in payload["profiles"] if item["name"] == "project-native")

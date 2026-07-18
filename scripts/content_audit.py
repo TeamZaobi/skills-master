@@ -204,6 +204,31 @@ def markdown_targets_outside_fences(text: str) -> list[tuple[str, str]]:
     return results
 
 
+def fleet_markdown_file_targets(grouped: dict[str, list[dict]]) -> dict[Path, set[Path]]:
+    """Resolve direct file links from every auditable Skill entrypoint.
+
+    A shared Skill may intentionally expose a reference only through a
+    consuming Skill.  Such a direct cross-Skill link is still progressive
+    disclosure: the consumer, not the shared provider entrypoint, owns the
+    routing condition.  Only explicit Markdown links to existing files count;
+    prose guesses, globs, and fenced examples remain excluded.
+    """
+    targets: dict[Path, set[Path]] = defaultdict(set)
+    for realpath in grouped:
+        skill_md = Path(realpath) / "SKILL.md"
+        if not skill_md.is_file():
+            continue
+        try:
+            text = skill_md.read_text(encoding="utf-8")
+        except (OSError, UnicodeError):
+            continue
+        for _, target in markdown_targets_outside_fences(text):
+            candidate = local_markdown_target(skill_md.parent, target)
+            if candidate is not None and candidate.is_file():
+                targets[candidate.resolve(strict=False)].add(skill_md.parent.resolve(strict=False))
+    return targets
+
+
 def procedural_step_count(text: str) -> int:
     """Count headings that are actually presented as ordered procedure steps.
 
@@ -303,6 +328,7 @@ def dimensions_for(
     allowed_frontmatter_keys: set[str],
     source_management: dict,
     frontmatter_contract: dict | None = None,
+    fleet_reference_targets: dict[Path, set[Path]] | None = None,
 ) -> tuple[dict, list[dict], list[dict]]:
     text = skill_md.read_text(encoding="utf-8")
     skill_root = skill_md.parent
@@ -310,6 +336,17 @@ def dimensions_for(
     reference_root = skill_root / "references"
     reference_files = sorted(reference_root.rglob("*.md")) if reference_root.is_dir() else []
     reachable_references = reachable_reference_files(skill_root, text, reference_files)
+    known_references = {ref.resolve(strict=False) for ref in reference_files}
+    resolved_skill_root = skill_root.resolve(strict=False)
+    externally_disclosed = {
+        reference
+        for reference in known_references
+        if any(
+            source_root != resolved_skill_root
+            for source_root in (fleet_reference_targets or {}).get(reference, set())
+        )
+    }
+    reachable_references.update(externally_disclosed)
     orphaned = [
         str(ref.relative_to(skill_root))
         for ref in reference_files
@@ -331,6 +368,16 @@ def dimensions_for(
     description = description.strip()
     findings: list[dict] = []
     observations: list[dict] = []
+    if externally_disclosed:
+        observations.append({
+            "category": "consumer_disclosed_reference_file",
+            "dimension": "progressive_disclosure",
+            "values": sorted(
+                str(path.relative_to(skill_root))
+                for path in externally_disclosed
+            ),
+            "disposition": "direct_cross_skill_markdown_pointer",
+        })
     frontmatter_keys = top_level_frontmatter_keys(text)
     extension_keys = sorted(set(frontmatter_keys) - allowed_frontmatter_keys)
     declared_repo_extensions = sorted(
@@ -467,6 +514,7 @@ def main() -> int:
     for asset in inventory.get("assets", []):
         if asset.get("skill_md"):
             grouped[resolve(asset["realpath"])].append(asset)
+    fleet_reference_targets = fleet_markdown_file_targets(grouped)
 
     profiles = []
     tier_c_realpaths: set[str] = set()
@@ -516,6 +564,7 @@ def main() -> int:
             allowed_frontmatter_keys,
             source_management,
             frontmatter_contract,
+            fleet_reference_targets,
         )
         static_outcome = "attention" if findings else "pass"
         if tier == "A":
