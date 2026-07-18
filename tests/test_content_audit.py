@@ -269,6 +269,33 @@ codex_native_allowed_frontmatter_keys = ["allowed-tools", "compatibility", "desc
         self.assertEqual(management["local_rewrite"], "prohibited_without_fork")
         self.assertEqual(management["source_contract"]["pinned_commit"], "abc123")
 
+    def test_registry_declared_sidecar_fork_is_classified_without_path_policy(self):
+        import importlib.util
+        module_path = Path(__file__).resolve().parent.parent / "scripts" / "content_audit.py"
+        spec = importlib.util.spec_from_file_location("content_audit_declared_fork", module_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        fork = self.root / "project" / "vendor" / "skill-forks" / "owner" / "lookup"
+        occurrence = {
+            "name": "lookup",
+            "role": "repo_source",
+            "entry_type": "real_dir",
+            "repo": str(self.root / "project"),
+            "declared": "owned_sidecar",
+        }
+
+        management = module.source_management_for(
+            str(fork),
+            occurrence,
+            [occurrence],
+            {},
+            [],
+        )
+
+        self.assertEqual(management["class"], "declared_local_fork_checkout")
+        self.assertEqual(management["mutation_owner"], "project_owner")
+        self.assertEqual(management["source_contract"]["id"], "registry-declared-project-local-fork")
+
     def test_repo_contract_extension_is_observation_but_undeclared_extension_is_finding(self):
         import importlib.util
         module_path = Path(__file__).resolve().parent.parent / "scripts" / "content_audit.py"

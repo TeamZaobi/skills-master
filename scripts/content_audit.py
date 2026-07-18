@@ -131,6 +131,22 @@ def source_management_for(
                 "pinned_commit": contract.get("pinned_commit", ""),
             },
         }
+    declared_local_fork = next(
+        (item for item in occurrences if item.get("declared") == "owned_sidecar"),
+        None,
+    )
+    if declared_local_fork:
+        repo = declared_local_fork.get("repo") or representative.get("repo", "")
+        return {
+            "class": "declared_local_fork_checkout",
+            "mutation_owner": "project_owner",
+            "local_rewrite": "owner_review_required",
+            "repo": repo,
+            "source_contract": {
+                "id": "registry-declared-project-local-fork",
+                "path": realpath,
+            },
+        }
     if representative.get("repo") or any(item.get("repo") for item in occurrences):
         repo = representative.get("repo") or next((item.get("repo") for item in occurrences if item.get("repo")), "")
         return {
