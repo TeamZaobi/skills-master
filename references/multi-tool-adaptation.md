@@ -9,14 +9,11 @@ Keep one canonical owner for the external capability while making each host cons
 Select the canonical location with
 [`layout-contract.md`](layout-contract.md) before creating projections. A
 repository-owned distributable skill uses `skills/<name>`; project host paths
-remain direct read-only projections. `.agents/skills` may serve Codex,
-Gemini/Antigravity, and Kimi Code when the project hosts support that shared
-discovery path. Kimi Code additionally reads project `.kimi-code/skills` and
-user `~/.kimi-code/skills`; both stay opt-in projections, and
-`.kimi-code/skills` wins when one name is visible in both project directories.
-Kimi ignores unknown frontmatter fields, so Claude- or Codex-specific keys do
-not break loading; its own keys are `whenToUse`, `disableModelInvocation`,
-`type`, and `arguments`.
+remain direct read-only projections. Host paths and invocation controls drift;
+use [`host-contracts.md`](host-contracts.md) as the dated, source-linked
+snapshot and reverify it before changing a projection. When Kimi sees the same
+name through `.agents/skills` and `.kimi-code/skills`, require both entries to
+resolve to one canonical realpath because public precedence is unspecified.
 
 The adaptation should answer:
 
@@ -36,24 +33,24 @@ Before adapting a tool, run a small intake pass instead of starting from install
 
 ### Method Skills
 
-Treat external TDD / BDD skills as method capabilities, not global entry
-owners. Keep `Gherkin` / `Given-When-Then` as a thin semantic-alignment trigger;
-it does not transfer lifecycle, project-truth, or implementation ownership to
-the method skill. Apply the intake pass above and the verification ladder below
-before widening its discovery surface.
-
-If the tool changes project truth, write boundaries, process state, recovery, or audit, hand the governance decision to `files-driven` before treating the adapter as accepted.
+Treat TDD, BDD, review, research, and other method skills as method
+capabilities. They retain authority over their method; lifecycle work retains
+authority over source and delivery. Project truth remains with the repository's
+declared governance owner.
 
 ## Skill And Plugin Catalog
 
-Do not treat the current four `Driven` sidecars as the whole tool universe.
-Any discovered or candidate skill, plugin, connector, app, MCP surface, CLI, command pack, workflow runtime, or browser adapter can enter this intake path.
+Any discovered or candidate skill, plugin, connector, app, MCP surface, CLI,
+command pack, workflow runtime, or browser adapter can enter this intake path.
 
 For an existing host-discovered skill:
 
 - If the user's task simply matches the skill, use the skill normally.
-- If the work changes trigger text, install location, upstream pin, generated projection, host discovery, or distribution, treat it as lifecycle work here.
-- If the skill's output becomes project truth, write authority, process state, recovery evidence, or audit material, hand acceptance to `files-driven`.
+- Route wording, completion criteria, and invocation design to
+  `writing-for-agents`; route install location, upstream pin, generated
+  projection, host discovery, and distribution here.
+- If the skill's output becomes project truth, hand acceptance to the
+  repository's declared governance owner.
 - If the skill depends on an external ecosystem, check official manuals, installed examples, and mature community practice before writing a custom adapter.
 
 ## Asset Shapes
@@ -93,7 +90,9 @@ Shape: one upstream repository contains multiple skills, host plugin metadata, c
 
 Default action: use the upstream installer or host plugin mechanism. Do not symlink the repository root as if it were one skill.
 
-Local adaptation: add a thin adapter only if the host needs a single trigger surface. The adapter should point to upstream ownership and list the generated live paths.
+Local adaptation: add a thin adapter only if the host needs one routing
+surface. Its agent-facing text follows `writing-for-agents`; its lifecycle
+metadata points to upstream ownership and generated live paths.
 
 Required check: verify the installer output and then verify host-side discovery. Installer success is not enough.
 
@@ -156,23 +155,18 @@ Avoid these:
 - confusing installer success with live host discovery
 - hiding generated projections inside the canonical source tree without marking them as generated
 
-## Current Sidecar Pattern
+## Sidecar Activation
 
-For the Superpowers, GSD, gstack, and Archon family of external workflow tools:
+Treat method bundles, command packs, review suites, and workflow runtimes by
+their actual asset shape rather than by a named local dispatcher. One primary
+owner remains responsible for the requested result. A secondary capability is
+activated through an explicit host surface and retains its upstream ownership.
 
-- Treat the four together as the current `Driven` execution layer for `files-driven`: execution discipline, long-task drive, virtual-team challenge, and workflow orchestration.
-- For Codex, keep broad `Driven` suites passive by default. Installing an upstream bundle is not permission to expose every generated skill on the default discovery path.
-- Superpowers-style discipline plugins are sidecar methodology bundles. Prefer upstream install and host discovery verification; make MyWay or another dispatcher route to them instead of vendoring the whole method text.
-- GSD-style command packs are long-context execution surfaces. Preserve their command or planning state model; adapt via trigger and invocation instructions.
-- gstack-style virtual-team suites are selected secondary-review surfaces. Keep browser, telemetry, auto-update, and team/network features explicit opt-in.
-- Archon-style systems are workflow runtimes. Install and verify the runtime and project workflow files; do not flatten the runtime into a normal skill.
+Lifecycle work is complete when the install shape, upstream pin, refresh path,
+host discovery, and declared smoke checks are proven. Project-truth acceptance
+belongs to the repository's governance owner.
 
-The common rule is one primary owner per turn. Sidecars can be invoked deliberately, but they should not all activate by default.
-
-Lifecycle work stops at proving install, adapter shape, upstream pin, refresh path, and live discovery. When a sidecar result needs to enter project truth, write boundaries, process state, recovery, or audit, hand off to `files-driven`; do not let the adapter or installer become the project governance owner.
-
-If a host's skill discovery would make a broad suite too eager, prefer one of
-these safer surfaces:
+For a broad suite, choose the narrowest supported activation surface:
 
 - passive cache outside the host discovery directory
 - one thin explicit adapter with narrow trigger text

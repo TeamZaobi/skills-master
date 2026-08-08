@@ -1,7 +1,8 @@
 # Multi-Skill Strategy
 
-This document defines how to model, split, merge, and validate skills when more
-than one skill could plausibly activate on the same request.
+This document defines ownership when more than one skill could plausibly apply.
+Agent-facing writing and invocation design follow `writing-for-agents`;
+`skills-master` owns lifecycle state and host delivery.
 
 ## Core Principle
 
@@ -33,7 +34,7 @@ Use an orchestration skill only when:
 - coordination is itself the main job
 - the orchestration rules are stable and reusable
 - source-of-truth ownership is explicit
-- `WHEN NOT TO USE`, handoff boundaries, and exit criteria are documented
+- ownership, activation boundaries, handoff points, and exit criteria are explicit
 
 ### Shared Asset
 
@@ -87,8 +88,12 @@ Use the final deliverable to choose the primary owner:
 - pull request, issue, CI, or review operation: the GitHub skill is primary
 - product code, visual design, or user-facing behavior: the implementation
   skill is primary
-- skill source, trigger, packaging, projection, or discovery change:
-  `skills-master` is primary
+- skill wording, instruction hierarchy, completion criteria, or invocation
+  design: `writing-for-agents` is primary
+- canonical source, upstream reconciliation, installation, packaging,
+  projection, or discovery diagnosis: `skills-master` is primary
+- mixed requests: the final deliverable chooses the primary owner; the other
+  skill supplies its bounded specialty
 
 When an adjacent skill contributes only evidence, planning, or transport, keep
 it secondary and leave final-deliverable ownership with the primary skill.
@@ -102,7 +107,7 @@ Requirements:
 - explicit source-of-truth ownership
 - explicit handoff points
 - explicit exit criteria
-- explicit cases where orchestration should not be used
+- explicit activation boundaries
 
 ## Anti-Patterns
 
@@ -112,7 +117,7 @@ Avoid these:
 - relying on implicit skill-to-skill calls
 - making the primary skill unusable when a sibling skill is absent
 - loading several overlapping skills just to share one reusable helper step
-- orchestration without a `WHEN NOT TO USE` section
+- orchestration without an ownership and activation boundary
 - parallel review courts on the same artifact without independent work boundaries
 
 ## Optional Metadata Convention
@@ -125,9 +130,9 @@ Example:
 ```yaml
 metadata: |
   family: skill-lifecycle
-  role: orchestrator
+  role: domain
   coordination: primary-plus-optional-secondary
-  adjacent_skills: deep-research, planning-with-files, github:github
+  adjacent_skills: writing-for-agents, deep-research, github:github
 ```
 
 Suggested keys:
@@ -146,6 +151,6 @@ Use the cheapest validation that answers the question:
 
 1. `quick_validate` for basic frontmatter and structure checks
 2. `check_multi_skill_boundaries` for static overlap and orchestration checks
-3. `trigger-evals.json` for single-skill trigger behavior
+3. `trigger-evals.json` for model-invoked, host-specific trigger behavior
 4. `boundary-evals.json` for adjacent-skill ownership and handoff cases
-5. Dynamic client-side multi-skill tests only when static checks are no longer enough
+5. Host-owned dynamic multi-skill tests when static checks are no longer enough

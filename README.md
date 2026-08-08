@@ -1,52 +1,58 @@
 # Skills Master
 
-`skills-master` governs the lifecycle of skills and companion agents: creation,
-maintenance, upstream convergence, evaluation, installation, projection,
-packaging, and discovery diagnosis.
+`skills-master` governs lifecycle state for skills and companion agents:
+canonical ownership, upstream convergence, installation, projection,
+packaging, distribution, and live discovery.
 
-The repository keeps the agent entrypoint compact and moves conditional detail
-into references and deterministic work into scripts.
+Agent-facing wording, instruction hierarchy, completion criteria, and
+invocation design belong to `writing-for-agents`. This repository applies that
+contract, then proves that the intended source reaches its declared hosts.
 
 ## Start Here
 
-- Agent operating instructions: [SKILL.md](SKILL.md)
-- Canonical layout choices: [references/layout-contract.md](references/layout-contract.md)
+- Agent entrypoint: [SKILL.md](SKILL.md)
+- Canonical layouts: [references/layout-contract.md](references/layout-contract.md)
+- Dated host mappings: [references/host-contracts.md](references/host-contracts.md)
 - Registry v2: [references/registry-v2.md](references/registry-v2.md)
+- Lifecycle branches: [references/workflows.md](references/workflows.md)
 - Multi-host adaptation: [references/multi-tool-adaptation.md](references/multi-tool-adaptation.md)
-- Content placement: [references/structure-boundaries.md](references/structure-boundaries.md)
 
 ## Common Commands
 
 ```bash
-# Create a repository-owned distributable skill.
-python3 scripts/init_skill.py my-skill --layout repo-product --project-root /path/to/repo
+# Create only the minimal lifecycle source after its writing contract is known.
+python3 scripts/init_skill.py my-skill --layout repo-product \
+  --project-root /path/to/repo --invocation user
+
+# Create a minimal canonical companion-agent source without auto-projecting it.
+python3 scripts/init_agent.py code-reviewer --project-root /path/to/repo
 
 # Validate one standalone asset.
 python3 -m scripts.quick_validate /path/to/repo/skills/my-skill
 
-# Validate repository topology when the repository declares skills/registry.toml.
+# Validate a registry-backed repository topology.
 python3 scripts/doctor.py /path/to/repo
 
 # Inspect or refresh direct host projections.
-python3 scripts/link_skill.py /path/to/repo/skills/my-skill --project-root /path/to/repo --status
+python3 scripts/link_skill.py /path/to/repo/skills/my-skill \
+  --project-root /path/to/repo --status
 
 # Package after validation.
 python3 -m scripts.package_skill /path/to/repo/skills/my-skill ./dist
 
-# Scan a fleet read-only and preserve decisions from the prior ledger.
-python3 scripts/fleet_scan.py --output-dir /path/to/run/fleet \
+# Run a read-only fleet scan with an explicit deployment policy.
+python3 scripts/fleet_scan.py --policy config/fleet-policy.local.toml \
+  --output-dir /path/to/run/fleet \
   --previous-ledger /path/to/prior/finding-ledger.v1.json
 ```
 
 ## Repository Map
 
-- `scripts/`: initialization, validation, linking, packaging, evaluation, fleet scanning, and doctor tooling
-- `references/`: layout, host, workflow, schema, and boundary contracts
-- `evals/`: trigger and ownership boundary cases
-- `agents/`: optional comparison, grading, and analysis roles
-- `eval-viewer/`: human review rendering
+- `scripts/`: lifecycle initialization, validation, linking, packaging, fleet scanning, and topology checks
+- `references/`: layout, host, workflow, registry, schema, and ownership contracts
+- `evals/`: trigger and adjacent-owner boundary cases
+- `agents/`: host-specific policy and display metadata
 
-Python 3.9+ is supported. Registry v2 uses the standard `tomllib` when available
-and a bundled parser for its deterministic subset on Python 3.9-3.10.
-
-Current release details are in [VERSION.md](VERSION.md).
+Python 3.9+ is supported. Deployment-specific fleet policies use ignored
+`config/*.local.toml` files and are never packaged. Release details are in
+[VERSION.md](VERSION.md).

@@ -1,4 +1,5 @@
 import json
+import hashlib
 import os
 import subprocess
 import sys
@@ -35,6 +36,8 @@ class ContentAuditTests(unittest.TestCase):
         )
         self.lock = self.root / "skill-lock.json"
         self.lock.write_text(json.dumps({"skills": {"locked": {"source": "upstream/skills", "sourceType": "github"}}}), encoding="utf-8")
+        self.rubric = self.root / "writing-for-agents.md"
+        self.rubric.write_text("# Writing for agents\n", encoding="utf-8")
         self.inventory = self.root / "inventory.json"
         self.inventory.write_text(json.dumps({
             "registries": [],
@@ -66,7 +69,8 @@ reason = "test control surface"
 
 [content_audit]
 skill_lock = "{self.lock}"
-codex_native_allowed_frontmatter_keys = ["allowed-tools", "compatibility", "description", "license", "metadata", "name"]
+rubric_path = "{self.rubric}"
+codex_native_allowed_frontmatter_keys = ["allowed-tools", "compatibility", "description", "disable-model-invocation", "license", "metadata", "name"]
 ''', encoding="utf-8")
 
     def tearDown(self):
@@ -87,6 +91,10 @@ codex_native_allowed_frontmatter_keys = ["allowed-tools", "compatibility", "desc
 
     def test_tier_a_requires_external_eval_and_plugin_is_tier_c(self):
         payload = self.run_audit()
+        self.assertEqual(
+            payload["rubric_sha256"],
+            hashlib.sha256(self.rubric.read_bytes()).hexdigest(),
+        )
         self.assertEqual(payload["summary"]["tier_a"], 1)
         self.assertEqual(payload["summary"]["tier_b"], 2)
         self.assertEqual(payload["summary"]["tier_c_inventory_only"], 1)
@@ -117,7 +125,7 @@ codex_native_allowed_frontmatter_keys = ["allowed-tools", "compatibility", "desc
             fh.write("\n## 2. Scope\n\nDetails.\n\n## 3. Examples\n\nDetails.\n")
         payload = self.run_audit()
         categories = [item["category"] for item in payload["profiles"][0]["findings"]]
-        self.assertNotIn("ordered_steps_without_completion_markers", categories)
+        self.assertNotIn("steps_without_completion_criteria", categories)
 
     def test_explicit_steps_without_completion_markers_are_reported(self):
         skill_text = self.skill / "SKILL.md"
@@ -128,7 +136,83 @@ codex_native_allowed_frontmatter_keys = ["allowed-tools", "compatibility", "desc
         skill_text.write_text(content, encoding="utf-8")
         payload = self.run_audit()
         categories = [item["category"] for item in payload["profiles"][0]["findings"]]
-        self.assertIn("ordered_steps_without_completion_markers", categories)
+        self.assertIn("steps_without_completion_criteria", categories)
+
+    def test_each_explicit_step_needs_its_own_completion_criterion(self):
+        skill_text = self.skill / "SKILL.md"
+        skill_text.write_text(
+            """---
+name: active
+description: Use when testing active content.
+---
+
+## Step 1. Inspect
+
+Inspect inputs.
+
+Completion criterion: every input is checked.
+
+## Step 2. Act
+
+Perform the action.
+""",
+            encoding="utf-8",
+        )
+
+        payload = self.run_audit()
+        profile = next(item for item in payload["profiles"] if item["name"] == "active")
+        finding = next(
+            item for item in profile["findings"]
+            if item["category"] == "steps_without_completion_criteria"
+        )
+        self.assertEqual(finding["values"], ["Step 2. Act"])
+
+    def test_user_invoked_description_does_not_need_trigger_language(self):
+        skill_text = self.skill / "SKILL.md"
+        skill_text.write_text(
+            """---
+name: active
+description: Manual document review.
+disable-model-invocation: true
+---
+
+# Manual review
+""",
+            encoding="utf-8",
+        )
+        inventory = json.loads(self.inventory.read_text(encoding="utf-8"))
+        inventory["assets"][0]["frontmatter"]["description"] = "Manual document review."
+        self.inventory.write_text(json.dumps(inventory), encoding="utf-8")
+
+        payload = self.run_audit()
+        profile = next(item for item in payload["profiles"] if item["name"] == "active")
+
+        self.assertEqual(profile["metrics"]["invocation_mode"], "user")
+        self.assertEqual(profile["dimensions"]["invocation"], "pass")
+        self.assertNotIn(
+            "unsupported_frontmatter_key",
+            [item["category"] for item in profile["findings"]],
+        )
+
+    def test_missing_rubric_fails_closed(self):
+        text = self.policy.read_text(encoding="utf-8").replace(
+            str(self.rubric), str(self.root / "missing-rubric.md")
+        )
+        self.policy.write_text(text, encoding="utf-8")
+        output = self.root / "quality.json"
+        env = dict(os.environ)
+        env["PYTHONPYCACHEPREFIX"] = str(self.root / "pycache")
+
+        result = subprocess.run([
+            sys.executable,
+            "scripts/content_audit.py",
+            "--inventory", str(self.inventory),
+            "--policy", str(self.policy),
+            "--output", str(output),
+        ], cwd=Path(__file__).resolve().parent.parent, env=env, capture_output=True, text=True)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("rubric", result.stderr.lower())
 
     def test_numbered_steps_under_workflow_without_completion_markers_are_reported(self):
         skill_text = self.skill / "SKILL.md"
@@ -139,9 +223,9 @@ codex_native_allowed_frontmatter_keys = ["allowed-tools", "compatibility", "desc
         skill_text.write_text(content, encoding="utf-8")
         payload = self.run_audit()
         categories = [item["category"] for item in payload["profiles"][0]["findings"]]
-        self.assertIn("ordered_steps_without_completion_markers", categories)
+        self.assertIn("steps_without_completion_criteria", categories)
 
-    def test_explicit_validation_marker_satisfies_completion_signal(self):
+    def test_validation_verb_does_not_replace_completion_criterion(self):
         skill_text = self.skill / "SKILL.md"
         content = skill_text.read_text(encoding="utf-8").replace(
             "## 1. Inspect\n\nCompletion criterion: every input is checked.\n",
@@ -150,9 +234,9 @@ codex_native_allowed_frontmatter_keys = ["allowed-tools", "compatibility", "desc
         skill_text.write_text(content, encoding="utf-8")
         payload = self.run_audit()
         categories = [item["category"] for item in payload["profiles"][0]["findings"]]
-        self.assertNotIn("ordered_steps_without_completion_markers", categories)
+        self.assertIn("steps_without_completion_criteria", categories)
 
-    def test_explicit_verify_step_satisfies_completion_signal(self):
+    def test_verify_heading_does_not_replace_completion_criterion(self):
         skill_text = self.skill / "SKILL.md"
         content = skill_text.read_text(encoding="utf-8").replace(
             "## 1. Inspect\n\nCompletion criterion: every input is checked.\n",
@@ -161,7 +245,7 @@ codex_native_allowed_frontmatter_keys = ["allowed-tools", "compatibility", "desc
         skill_text.write_text(content, encoding="utf-8")
         payload = self.run_audit()
         categories = [item["category"] for item in payload["profiles"][0]["findings"]]
-        self.assertNotIn("ordered_steps_without_completion_markers", categories)
+        self.assertIn("steps_without_completion_criteria", categories)
 
     def test_reference_reachable_through_index_is_not_orphaned(self):
         reference_dir = self.skill / "references"

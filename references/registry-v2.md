@@ -13,7 +13,7 @@ canonical_dir = "skills"
 [[projection]]
 id = "agents"
 path = ".agents/skills"
-hosts = ["codex", "gemini"]
+hosts = ["codex"]
 required = true
 
 [[projection]]
@@ -92,10 +92,10 @@ hosts = ["kimi"]
 required = false
 ```
 
-When one name is visible from both project discovery directories, Kimi Code
-loads it from `.kimi-code/skills` first. The doctor reports
-`projection_kimi_shadow` when the two copies resolve to different realpaths,
-because the hosts would otherwise see different content.
+When one name is visible from both project discovery directories, require the
+two entries to resolve to the same canonical realpath. Kimi Code's public
+documentation does not define same-name precedence. The doctor reports
+`projection_kimi_conflict` when the realpaths differ.
 
 ## Migration From v1
 
@@ -107,8 +107,8 @@ because the hosts would otherwise see different content.
 6. When a repository consumes an external Skill, register it as
    `[[consumer_skill]]` and project every host directly to the dependency's
    canonical source. Do not keep a local editable mirror.
-7. Run `scripts/doctor.py`; remove the old directory only after it reports no
-   active canonical or projection dependency on that path.
+7. Run `scripts/doctor.py`; authorize retirement separately, after it reports
+   no active canonical or projection dependency on the old path.
 
 Historical receipts and immutable snapshots keep their original path text.
 They describe the environment in which they were produced and are not live

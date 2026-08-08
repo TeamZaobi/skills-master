@@ -1,47 +1,47 @@
 [
   {
-    "query": "帮我从零创建一个 skill，用来规范 AI 代码审查输出格式。",
+    "query": "升级这个已安装的 skill：对比 upstream、canonical source 和 live copy，再合并本地定制。",
     "should_trigger": true
   },
   {
-    "query": "给这个项目搭一个 companion agent，负责 benchmark 结果分析和总结。",
+    "query": "确认 Codex 现在真正发现的是哪一份 skill，并给出解析后的 canonical realpath。",
     "should_trigger": true
   },
   {
-    "query": "升级这个已安装的 skill，先看看 upstream 最近有没有变化，再决定怎么合并本地定制。",
+    "query": "把这个 skill 重新投影到 Claude 和 Codex 的当前目录，并用新会话确认可见。",
     "should_trigger": true
   },
   {
-    "query": "确认 Codex 现在真正读取的是哪一份 skill，不要只看源码仓库。",
+    "query": "这个仓库里有三份同名 skill，帮我判定 owner、editable source、generated output 和 stale copy。",
     "should_trigger": true
   },
   {
-    "query": "把这个 skill 重新链接到 Claude 和 Codex 的目录，并确认 live path。",
+    "query": "把这个 companion agent 做成可分发包，但不要把本地 fleet policy 打进去。",
     "should_trigger": true
   },
   {
-    "query": "这个 skill 越改越乱了，帮我重写 SKILL.md，删掉过拟合出来的规则。",
+    "query": "检查 Kimi 的 .agents/skills 和 .kimi-code/skills 是否指向同一个 canonical source。",
     "should_trigger": true
   },
   {
-    "query": "README、SKILL.md 和脚本能力已经对不上了，帮我做一次文档校正。",
+    "query": "为这批 skills 做只读 fleet inventory，使用明确的本地 policy 和上轮 finding ledger。",
     "should_trigger": true
   },
   {
-    "query": "给这个 skill 建一套 eval、人工 review 和 benchmark 闭环。",
-    "should_trigger": true
+    "query": "从零写一个代码审查 skill，设计它的 description、步骤和完成标准。",
+    "should_trigger": false
   },
   {
-    "query": "优化这个 skill 的 frontmatter description，让触发边界更准。",
-    "should_trigger": true
+    "query": "重写这个 SKILL.md，让信息层级更清楚并补齐每一步的完成标准。",
+    "should_trigger": false
   },
   {
-    "query": "比较 GitHub upstream、本地 source of truth 和 live copy 的差异，再决定 merge 方案。",
-    "should_trigger": true
+    "query": "判断这个 skill 应该由用户调用还是模型自动调用，并设计对应元数据。",
+    "should_trigger": false
   },
   {
-    "query": "为这个 agent 建单一真实源和跨工具投影，不要维护多份手改副本。",
-    "should_trigger": true
+    "query": "只优化 frontmatter description，让模型更准确地选择这个 skill。",
+    "should_trigger": false
   },
   {
     "query": "帮我修这个 React 首页的布局和配色。",
@@ -52,31 +52,7 @@
     "should_trigger": false
   },
   {
-    "query": "给这个仓库加 GitHub Actions CI 和 lint。",
-    "should_trigger": false
-  },
-  {
-    "query": "帮我实现一个聊天 agent 的业务逻辑和 API，不需要管理 skill 或安装目录。",
-    "should_trigger": false
-  },
-  {
-    "query": "做一个通用的多 agent orchestration 框架，不用考虑现有 skills 的 source of truth。",
-    "should_trigger": false
-  },
-  {
-    "query": "只想把 README 改得更有营销感，不需要对齐真实脚本和工作流。",
-    "should_trigger": false
-  },
-  {
-    "query": "帮我优化数据库索引，解决 PostgreSQL 慢查询。",
-    "should_trigger": false
-  },
-  {
-    "query": "把这个 PDF 批量转成 Markdown，不需要做成 skill。",
-    "should_trigger": false
-  },
-  {
-    "query": "帮我给客服机器人润色 prompt，让说话更像真人，不涉及 skill 或 agent 文件。",
+    "query": "给这个仓库修复 GitHub Actions 的 failing CI。",
     "should_trigger": false
   }
 ]

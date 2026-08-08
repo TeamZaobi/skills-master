@@ -21,7 +21,7 @@ DOCTOR = ROOT / "scripts" / "doctor.py"
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run a read-only structural and content governance cycle")
     parser.add_argument("--output-root", required=True, help="New or existing directory for cycle receipts")
-    parser.add_argument("--policy", default=str(ROOT / "references" / "fleet-policy.v1.toml"))
+    parser.add_argument("--policy", required=True, help="Explicit deployment-specific fleet policy")
     parser.add_argument("--previous-ledger", help="Optional prior structural finding ledger")
     return parser.parse_args()
 

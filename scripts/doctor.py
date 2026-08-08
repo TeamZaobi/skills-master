@@ -132,7 +132,7 @@ class RepositoryDoctor:
             seen_names.add(name)
             self._check_consumer_skill(consumer)
 
-        self._check_kimi_shadow()
+        self._check_kimi_conflict()
         return self.findings
 
     def _load_projections(self):
@@ -400,13 +400,12 @@ class RepositoryDoctor:
                     link_path,
                 )
 
-    def _check_kimi_shadow(self):
+    def _check_kimi_conflict(self):
         # Kimi Code discovers project skills from both .agents/skills and
-        # .kimi-code/skills, and resolves a duplicated name from
-        # .kimi-code/skills first. Co-projecting one canonical source to both
-        # directories is redundant but harmless; two different realpaths
-        # behind one name makes Kimi see different content than the other
-        # hosts, so that divergence is an error.
+        # .kimi-code/skills. Its current public documentation does not define
+        # which same-name directory wins. Co-projecting one canonical source
+        # to both directories is redundant but harmless; two different
+        # realpaths are therefore an unresolved host conflict and fail closed.
         shared = self.root / ".agents" / "skills"
         kimi = self.root / ".kimi-code" / "skills"
         if not shared.is_dir() or not kimi.is_dir():
@@ -418,9 +417,10 @@ class RepositoryDoctor:
             shared_real = (shared / entry.name).resolve()
             if entry.resolve() != shared_real:
                 self.error(
-                    "projection_kimi_shadow",
-                    f"Kimi Code resolves {entry.name} from .kimi-code/skills first, "
-                    f"but it points to {entry.resolve()} while .agents/skills points to {shared_real}",
+                    "projection_kimi_conflict",
+                    f"Kimi Code can discover {entry.name} from both project directories, "
+                    f"but .kimi-code/skills points to {entry.resolve()} while "
+                    f".agents/skills points to {shared_real}; public precedence is unspecified",
                     entry,
                 )
 

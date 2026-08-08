@@ -16,7 +16,8 @@ directory to `skills.load.extraDirs` rather than copying skill bodies.
 Usage:
     link_skill.py <skill-path>                        # Link to default user-level targets
     link_skill.py <skill-path> --project-root <path> # Link into project tool dirs
-    link_skill.py <skill-path> --targets claude,codex,antigravity # Link to specific targets
+    link_skill.py <skill-path> --targets claude,codex,antigravity # Link to documented targets
+    link_skill.py <skill-path> --targets codex-compat # Opt-in legacy Codex path
     link_skill.py <skill-path> --targets kimi          # Opt-in Kimi Code directory
     link_skill.py <skill-path> --status               # Show link status
     link_skill.py <skill-path> --unlink               # Remove all links
@@ -44,8 +45,8 @@ from toml_compat import load_toml
 
 # ─── Default link targets ───────────────────────────────────────────
 # Keep one editable source of truth and project outward to tool-local
-# discovery folders. Some local setups also expose compatibility mirrors
-# in addition to the primary documented path. Tools that use runtime config
+# discovery folders. Compatibility mirrors are separate opt-in targets, never
+# defaults. Tools that use runtime config
 # extraDirs, such as Hermes and OpenClaw, are documented in SKILL.md/README.md
 # instead of being modeled here as symlink targets.
 LINK_TARGETS = {
@@ -60,19 +61,24 @@ LINK_TARGETS = {
     "codex": {
         "user": [
             {"label": "codex", "path": ".agents/skills", "link_allowed": True},
-            {"label": "codex-home", "path": ".codex/skills", "link_allowed": True},
         ],
         "project": [
             {"label": "codex", "path": ".agents/skills", "link_allowed": True},
         ],
     },
+    # Compatibility only. Current Codex documentation uses ~/.agents/skills.
+    "codex-compat": {
+        "user": [
+            {"label": "codex-compat", "path": ".codex/skills", "link_allowed": True},
+        ],
+        "project": [],
+    },
     "antigravity": {
         "user": [
-            {"label": "antigravity", "path": ".gemini/antigravity/skills", "link_allowed": True},
-            {"label": "gemini", "path": ".gemini/skills", "link_allowed": True},
+            {"label": "antigravity", "path": ".gemini/config/skills", "link_allowed": True},
         ],
         "project": [
-            {"label": "antigravity", "path": ".agents/skills", "link_allowed": False},
+            {"label": "antigravity", "path": ".agents/skills", "link_allowed": True},
         ],
     },
     # Kimi Code discovers .agents/skills natively (already covered by the

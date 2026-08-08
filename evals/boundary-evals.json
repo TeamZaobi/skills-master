@@ -1,50 +1,50 @@
 [
   {
-    "query": "先调研一下社区讨论的 skills 最佳实践，再回头重写这个 skill。",
-    "expected_primary_skill": "skills-master",
-    "allowed_secondary_skills": ["deep-research"],
-    "forbidden_skills": [],
-    "expected_route": "research_then_refactor",
-    "rationale": "最终交付物仍然是 skill 生命周期改造，研究只是辅助能力。"
-  },
-  {
-    "query": "给这个 repo 做一份社区与官方文档对照的深度研究报告，不需要修改任何 skill。",
-    "expected_primary_skill": "deep-research",
+    "query": "重写这个 SKILL.md 的说明层级、步骤和完成标准，不改安装位置。",
+    "expected_primary_skill": "writing-for-agents",
     "allowed_secondary_skills": [],
     "forbidden_skills": ["skills-master"],
-    "expected_route": "research_only",
-    "rationale": "主任务是研究报告，而不是 skill 或 agent 的治理修改。"
+    "expected_route": "write_agent_instructions",
+    "rationale": "交付物是 agent-facing writing contract。"
   },
   {
-    "query": "把这个 skill 的 README、description 和安装路径整理一致，并确认哪份 live copy 生效。",
+    "query": "对比 upstream、canonical source 和 live copy，合并后重新投影到 Codex。",
     "expected_primary_skill": "skills-master",
-    "allowed_secondary_skills": [],
-    "forbidden_skills": ["web-research"],
-    "expected_route": "doc_cleanup_then_install_validation",
-    "rationale": "核心是 skill lifecycle 和 source-of-truth 整理，不是网页信息检索。"
+    "allowed_secondary_skills": ["writing-for-agents"],
+    "forbidden_skills": [],
+    "expected_route": "reconcile_then_project",
+    "rationale": "主交付物是生命周期收敛；仅在文字契约变化时使用写作 Skill。"
   },
   {
-    "query": "为这个长期 skill 重构任务建一个持久化文件计划并持续跟踪。",
-    "expected_primary_skill": "planning-with-files",
+    "query": "设计一个用户手动调用的新 skill，然后安装到 Codex 和 Claude。",
+    "expected_primary_skill": "writing-for-agents",
     "allowed_secondary_skills": ["skills-master"],
     "forbidden_skills": [],
-    "expected_route": "plan_then_skill_work",
-    "rationale": "如果持久计划和状态留痕是主交付物，规划技能应主导。"
+    "expected_route": "design_then_deliver",
+    "rationale": "先由写作 Skill 定义内容和调用语义，再由生命周期 Skill 交付。"
   },
   {
-    "query": "看这个 GitHub PR 的 failing CI 并修复它，不需要处理 skill 生命周期。",
-    "expected_primary_skill": "github:gh-fix-ci",
+    "query": "不改 SKILL.md，只修复这个 skill 的 dangling symlink 并确认 live discovery。",
+    "expected_primary_skill": "skills-master",
     "allowed_secondary_skills": [],
-    "forbidden_skills": ["skills-master"],
-    "expected_route": "github_ops_only",
-    "rationale": "核心任务是 GitHub CI 运维，不是 skill 治理。"
+    "forbidden_skills": ["writing-for-agents"],
+    "expected_route": "repair_delivery_only",
+    "rationale": "没有 agent-facing content 变更。"
+  },
+  {
+    "query": "给这个 repo 做一份社区与官方 skill 规范的研究报告，不修改本地资产。",
+    "expected_primary_skill": "deep-research",
+    "allowed_secondary_skills": [],
+    "forbidden_skills": ["skills-master", "writing-for-agents"],
+    "expected_route": "research_only",
+    "rationale": "交付物是研究报告。"
   },
   {
     "query": "帮我做一个 landing page redesign，展示这个 skill 的卖点。",
     "expected_primary_skill": "frontend-design",
     "allowed_secondary_skills": [],
-    "forbidden_skills": ["skills-master"],
+    "forbidden_skills": ["skills-master", "writing-for-agents"],
     "expected_route": "design_only",
-    "rationale": "主交付物是视觉与实现，而不是 skill 生命周期修改。"
+    "rationale": "交付物是页面视觉与实现。"
   }
 ]

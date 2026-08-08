@@ -1,44 +1,25 @@
 #!/usr/bin/env python3
-"""
-Agent Initializer - Creates a new canonical agent from template
-
-Usage:
-    init_agent.py <agent-name> [--path <path>] [--project-root <path>] [--link | --no-link]
-"""
+"""Create a minimal canonical companion-agent source."""
 
 import argparse
 import re
 import sys
 from pathlib import Path
 
-MAX_AGENT_NAME_LENGTH = 64
-RESERVED_NAME_TOKENS = {"anthropic", "claude", "codex", "agent", "ai"}
-DEFAULT_GLOBAL_HUB = (Path.home() / ".agents" / "agents").resolve()
 
+MAX_AGENT_NAME_LENGTH = 64
+DEFAULT_GLOBAL_HUB = (Path.home() / ".agents" / "agents").resolve()
 
 AGENT_TEMPLATE = """---
 name: {agent_name}
-description: [TODO: Complete and informative explanation of what this agent owns and when to invoke it.]
+description: "[TODO: State the distinct job this agent owns and when a host should delegate to it.]"
 ---
 
 # {agent_title}
 
-## Mission
-
-[TODO: State the perspective this agent owns.]
-
-## Responsibilities
-
-- [TODO: What this agent should do]
-- [TODO: What this agent should not do]
-
-## Boundaries
-
-- [TODO: Explicitly state where this agent must stop]
-
-## Tooling Notes
-
-- [TODO: If this agent should trigger skills or downstream workers, describe the boundary here.]
+[TODO: Write the agent-facing contract. Keep the job narrow, declare its
+authority and completion criterion, and add host-specific capabilities only
+when the target host supports them.]
 """
 
 
@@ -56,138 +37,89 @@ def validate_agent_name(agent_name):
             f"Agent name is too long ({len(agent_name)} chars). "
             f"Maximum is {MAX_AGENT_NAME_LENGTH}."
         )
-    reserved_hits = sorted({token for token in agent_name.split("-") if token in RESERVED_NAME_TOKENS})
-    if reserved_hits:
-        return False, (
-            f"Agent name contains reserved token(s): {', '.join(reserved_hits)}. "
-            "Use a neutral name."
-        )
     return True, None
 
 
 def init_agent(agent_name, path):
-    agent_dir = Path(path).resolve() / agent_name
+    """Create one minimal AGENT.md source and return its directory."""
+    agent_dir = Path(path).expanduser().resolve() / agent_name
     if agent_dir.exists():
         print(f"❌ Error: Agent directory already exists: {agent_dir}")
         return None
 
     try:
         agent_dir.mkdir(parents=True, exist_ok=False)
-        print(f"✅ Created agent directory: {agent_dir}")
-    except Exception as exc:
-        print(f"❌ Error creating directory: {exc}")
-        return None
-
-    agent_title = title_case_agent_name(agent_name)
-    agent_md_path = agent_dir / "AGENT.md"
-    try:
-        agent_md_path.write_text(
-            AGENT_TEMPLATE.format(agent_name=agent_name, agent_title=agent_title)
+        (agent_dir / "AGENT.md").write_text(
+            AGENT_TEMPLATE.format(
+                agent_name=agent_name,
+                agent_title=title_case_agent_name(agent_name),
+            ),
+            encoding="utf-8",
         )
-        print("✅ Created AGENT.md")
-    except Exception as exc:
-        print(f"❌ Error creating AGENT.md: {exc}")
+    except OSError as exc:
+        print(f"❌ Error creating companion agent: {exc}")
         return None
 
-    print(f"\n✅ Agent '{agent_name}' initialized successfully at {agent_dir}")
-    print("\nNext steps:")
-    print("1. Edit AGENT.md to complete the TODO items and tighten the boundaries")
-    print("2. Run the validator when ready to check the agent structure")
+    print(f"✅ Created minimal companion-agent source: {agent_dir}")
+    print("Next: replace the TODOs, add only supported host capabilities, then run quick_validate.")
     return agent_dir
-
-
-def is_global_hub(path):
-    resolved = Path(path).expanduser().resolve()
-    return resolved == DEFAULT_GLOBAL_HUB
 
 
 def default_project_hub(project_root):
     return Path(project_root).expanduser().resolve() / ".agents" / "agents"
 
 
-def is_project_hub(path, project_root):
-    if project_root is None:
-        return False
-    return Path(path).expanduser().resolve() == default_project_hub(project_root)
-
-
 def auto_link(agent_dir, project_root=None):
+    """Project a new source only after explicit --link authorization."""
     sys.path.insert(0, str(Path(__file__).parent))
     from link_agent import link_agent, resolve_agent_path
 
     agent_path = resolve_agent_path(str(agent_dir))
     if agent_path is None:
-        print("⚠  Could not project agent (invalid path)")
+        print("⚠  Could not project companion agent (invalid path)")
         return
-
-    print("\n🔗 Projecting to development tools...")
     created, updated, skipped, warnings = link_agent(agent_path, project_root=project_root)
-    print(f"   Done: {created} created, {updated} updated, {skipped} skipped, {warnings} warnings")
+    print(f"Done: {created} created, {updated} updated, {skipped} skipped, {warnings} warnings")
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Initialize a new canonical agent from template",
+        description="Initialize a minimal canonical companion-agent source",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s review-agent --path ~/.agents/agents
-  %(prog)s review-agent --path ~/.agents/agents --no-link
-  %(prog)s review-agent --project-root /path/to/repo
+  %(prog)s code-reviewer --path ~/.agents/agents
+  %(prog)s repo-reviewer --project-root /path/to/repo
+  %(prog)s repo-reviewer --project-root /path/to/repo --link
         """,
     )
-    parser.add_argument("agent_name", help="Name of the agent (hyphen-case)")
+    parser.add_argument("agent_name", help="Hyphen-case companion-agent name")
+    parser.add_argument("--path", help="Canonical parent directory")
+    parser.add_argument("--project-root", help="Project root for a project-owned source")
     parser.add_argument(
-        "--path",
-        help="Directory where the agent folder will be created (default: ~/.agents/agents or <project-root>/.agents/agents)",
+        "--link",
+        action="store_true",
+        help="After creation, project to the configured default hosts",
     )
-    parser.add_argument(
-        "--project-root",
-        help="Project root for project-scoped agents; default shared hub is <project-root>/.agents/agents",
-    )
-
-    link_group = parser.add_mutually_exclusive_group()
-    link_group.add_argument("--link", action="store_true", default=None, help="Project to default tool directories after creation")
-    link_group.add_argument("--no-link", action="store_true", default=False, help="Skip auto-projection even for the global hub")
-
     args = parser.parse_args()
+
     agent_name = args.agent_name.strip()
-    if not agent_name:
-        print("❌ Error: Agent name cannot be empty.")
-        sys.exit(1)
     valid, error_message = validate_agent_name(agent_name)
     if not valid:
-        print(f"❌ Error: {error_message}")
-        sys.exit(1)
+        parser.error(error_message)
 
-    target_path = args.path
-    if target_path is None:
-        target_path = (
-            str(default_project_hub(args.project_root))
-            if args.project_root
-            else str(DEFAULT_GLOBAL_HUB)
-        )
-
-    print(f"🚀 Initializing agent: {agent_name}")
-    print(f"   Location: {target_path}")
-    if args.project_root:
-        print(f"   Project root: {Path(args.project_root).expanduser().resolve()}")
-    print()
-
+    target_path = args.path or (
+        str(default_project_hub(args.project_root))
+        if args.project_root
+        else str(DEFAULT_GLOBAL_HUB)
+    )
     result = init_agent(agent_name, target_path)
-
-    if result:
-        should_link = args.link
-        if should_link is None and not args.no_link:
-            should_link = is_global_hub(target_path) or is_project_hub(target_path, args.project_root)
-
-        if should_link:
-            auto_link(result, project_root=args.project_root)
-
-        sys.exit(0)
-    else:
-        sys.exit(1)
+    if result is None:
+        return 1
+    if args.link:
+        auto_link(result, project_root=args.project_root)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -14,6 +15,7 @@ from pathlib import Path
 SKILLS_MASTER_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SKILLS_MASTER_ROOT))
 from scripts.toml_compat import load_toml
+from scripts.utils import parse_markdown_frontmatter
 
 
 TRIGGER_PATTERN = re.compile(r"\buse when\b|\bwhen\b|\bmentions?\b|用于|当用户|当任务|适用于|提到", re.I)
@@ -25,21 +27,29 @@ PROCEDURE_PARENT = re.compile(
     re.I,
 )
 COMPLETION_PATTERN = re.compile(
-    r"completion criterion|done when|acceptance|exit criterion|\bvalidate\b|\bvalidation\b|"
-    r"\bverify\b|\bverification\b|\breview\b|\bchecklist\b|完成标准|完成条件|验收|退出条件|验证|校验|自检|检查清单|终审",
+    r"completion criterion|done when|acceptance criterion|exit criterion|"
+    r"完成标准|完成条件|验收标准|退出条件",
     re.I,
 )
 NEGATION_PATTERN = re.compile(r"\bdo not\b|\bdon't\b|\bnever\b|\bmust not\b|禁止|不得|不要|切勿", re.I)
 MARKDOWN_LINK_PATTERN = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 POINTER_WORDS = re.compile(r"\bwhen\b|\bif\b|\bfor\b|\bread\b|\bsee\b|\buse\b|当|若|如果|需要|涉及|参考|参见|见", re.I)
 INACTIVE_STATUS_MARKERS = ("quarantined", "reference", "planned", "inactive", "archived", "retired")
-DEFAULT_FRONTMATTER_KEYS = {"allowed-tools", "compatibility", "description", "license", "metadata", "name"}
+DEFAULT_FRONTMATTER_KEYS = {
+    "allowed-tools",
+    "compatibility",
+    "description",
+    "disable-model-invocation",
+    "license",
+    "metadata",
+    "name",
+}
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Audit editable Skills using writing-great-skills dimensions")
+    parser = argparse.ArgumentParser(description="Audit objective Skill structure against an explicit writing rubric")
     parser.add_argument("--inventory", required=True, help="inventory.v1.json produced by fleet_scan.py")
-    parser.add_argument("--policy", required=True, help="fleet-policy.v1.toml with content_tier_a records")
+    parser.add_argument("--policy", required=True, help="Explicit deployment policy with content_tier_a records")
     parser.add_argument("--output", required=True, help="Output JSON profile path")
     return parser.parse_args()
 
@@ -229,8 +239,8 @@ def fleet_markdown_file_targets(grouped: dict[str, list[dict]]) -> dict[Path, se
     return targets
 
 
-def procedural_step_count(text: str) -> int:
-    """Count headings that are actually presented as ordered procedure steps.
+def procedural_step_sections(text: str) -> list[dict[str, object]]:
+    """Return ordered procedure sections and their explicit completion bounds.
 
     Plain numbered document sections such as ``## 1. Scope`` and
     ``## 2. Examples`` are information architecture, not proof that the Skill
@@ -238,9 +248,10 @@ def procedural_step_count(text: str) -> int:
     numeric child headings under a workflow/procedure parent.
     """
     parents: dict[int, str] = {}
-    count = 0
+    headings: list[tuple[int, int, str, bool]] = []
     in_fence = False
-    for line in text.splitlines():
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
         if line.lstrip().startswith("```"):
             in_fence = not in_fence
             continue
@@ -252,12 +263,32 @@ def procedural_step_count(text: str) -> int:
         level = len(match.group(1))
         title = match.group(2).strip()
         parents = {parent_level: value for parent_level, value in parents.items() if parent_level < level}
-        if EXPLICIT_STEP_HEADING.match(title):
-            count += 1
-        elif NUMERIC_HEADING.match(title) and any(PROCEDURE_PARENT.search(value) for value in parents.values()):
-            count += 1
+        is_step = bool(EXPLICIT_STEP_HEADING.match(title)) or bool(
+            NUMERIC_HEADING.match(title)
+            and any(PROCEDURE_PARENT.search(value) for value in parents.values())
+        )
+        headings.append((index, level, title, is_step))
         parents[level] = title
-    return count
+
+    sections: list[dict[str, object]] = []
+    for position, (start, level, title, is_step) in enumerate(headings):
+        if not is_step:
+            continue
+        end = len(lines)
+        for next_start, next_level, _, _ in headings[position + 1 :]:
+            if next_level <= level:
+                end = next_start
+                break
+        body = "\n".join(lines[start + 1 : end])
+        sections.append({
+            "title": title,
+            "has_completion_criterion": bool(COMPLETION_PATTERN.search(body)),
+        })
+    return sections
+
+
+def procedural_step_count(text: str) -> int:
+    return len(procedural_step_sections(text))
 
 
 def reachable_reference_files(skill_root: Path, skill_text: str, reference_files: list[Path]) -> set[Path]:
@@ -331,6 +362,7 @@ def dimensions_for(
     fleet_reference_targets: dict[Path, set[Path]] | None = None,
 ) -> tuple[dict, list[dict], list[dict]]:
     text = skill_md.read_text(encoding="utf-8")
+    frontmatter, _ = parse_markdown_frontmatter(skill_md)
     skill_root = skill_md.parent
     lines = text.splitlines()
     reference_root = skill_root / "references"
@@ -362,8 +394,14 @@ def dimensions_for(
         if candidate is not None and target.split("#", 1)[0].endswith(".md") and not candidate.is_file():
             broken.append(target)
 
-    step_count = procedural_step_count(text)
+    step_sections = procedural_step_sections(text)
+    step_count = len(step_sections)
     completion_count = len(COMPLETION_PATTERN.findall(text))
+    steps_without_completion = [
+        str(section["title"])
+        for section in step_sections
+        if not section["has_completion_criterion"]
+    ]
     negation_count = len(NEGATION_PATTERN.findall(text))
     description = description.strip()
     findings: list[dict] = []
@@ -424,11 +462,16 @@ def dimensions_for(
                 "disposition": "owner_review_required",
             })
 
+    invocation_mode = (
+        "user"
+        if str(frontmatter.get("disable-model-invocation", "false")).lower() == "true"
+        else "model"
+    )
     invocation_status = "pass"
     if not description:
         invocation_status = "attention"
         findings.append({"category": "missing_description", "dimension": "invocation"})
-    elif not TRIGGER_PATTERN.search(description):
+    elif invocation_mode == "model" and not TRIGGER_PATTERN.search(description):
         invocation_status = "manual_review"
 
     hierarchy_status = "pass"
@@ -437,9 +480,13 @@ def dimensions_for(
         findings.append({"category": "large_top_level_without_disclosure", "dimension": "information_hierarchy"})
 
     completion_status = "pass"
-    if step_count >= 2 and completion_count == 0:
+    if steps_without_completion:
         completion_status = "attention"
-        findings.append({"category": "ordered_steps_without_completion_markers", "dimension": "completion_criteria"})
+        findings.append({
+            "category": "steps_without_completion_criteria",
+            "dimension": "completion_criteria",
+            "values": steps_without_completion,
+        })
 
     disclosure_status = "pass"
     if broken:
@@ -478,6 +525,7 @@ def dimensions_for(
         "lines": len(lines),
         "bytes": len(text.encode("utf-8")),
         "description_chars": len(description),
+        "invocation_mode": invocation_mode,
         "description_has_explicit_trigger_phrase": bool(TRIGGER_PATTERN.search(description)),
         "step_headings": step_count,
         "completion_markers": completion_count,
@@ -504,6 +552,12 @@ def main() -> int:
     policy = load_toml(policy_path)
     tier_a = {resolve(item["path"]): item["reason"] for item in policy.get("content_tier_a", [])}
     content_policy = policy.get("content_audit", {})
+    rubric_raw = content_policy.get("rubric_path")
+    if not rubric_raw:
+        raise ValueError("content audit rubric_path is required")
+    rubric_path = Path(rubric_raw).expanduser().resolve(strict=False)
+    if not rubric_path.is_file():
+        raise FileNotFoundError(f"content audit rubric not found: {rubric_path}")
     allowed_frontmatter_keys = set(content_policy.get("codex_native_allowed_frontmatter_keys", DEFAULT_FRONTMATTER_KEYS))
     lock_path, skill_lock = load_skill_lock(content_policy.get("skill_lock"))
     frontmatter_contracts = policy.get("frontmatter_contract", [])
@@ -598,8 +652,9 @@ def main() -> int:
         "inventory": str(inventory_path),
         "policy": str(policy_path),
         "skill_lock": lock_path,
-        "rubric": "/Users/jixiaokang/.agents/skills/writing-great-skills/SKILL.md",
-        "method": "Tier A and B receive the same static signals; Tier A additionally requires usage evidence and external positive/near-miss evaluation before content_predictability_clean can pass.",
+        "rubric": str(rubric_path),
+        "rubric_sha256": hashlib.sha256(rubric_path.read_bytes()).hexdigest(),
+        "method": "Static checks cover objective structure only. Pointer quality, leading words, relevance, no-ops, and behavioral value require rubric-guided review or external evaluation.",
         "summary": {
             "unique_skill_realpaths": len(grouped),
             "audited": len(profiles),

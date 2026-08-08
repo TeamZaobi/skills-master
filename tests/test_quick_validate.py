@@ -6,6 +6,45 @@ from scripts.quick_validate import validate_skill
 
 
 class QuickValidateTests(unittest.TestCase):
+    def test_user_invoked_skill_is_valid(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            (root / "SKILL.md").write_text(
+                """---
+name: manual-review
+description: Review an agent-facing document on explicit request.
+disable-model-invocation: true
+---
+
+# Manual Review
+""",
+                encoding="utf-8",
+            )
+
+            valid, message = validate_skill(root)
+
+        self.assertTrue(valid, message)
+
+    def test_invocation_flag_must_be_boolean(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            (root / "SKILL.md").write_text(
+                """---
+name: manual-review
+description: Review an agent-facing document on explicit request.
+disable-model-invocation: sometimes
+---
+
+# Manual Review
+""",
+                encoding="utf-8",
+            )
+
+            valid, message = validate_skill(root)
+
+        self.assertFalse(valid)
+        self.assertIn("disable-model-invocation", message)
+
     def test_nested_metadata_keys_are_not_misclassified_as_top_level(self):
         with tempfile.TemporaryDirectory() as tempdir:
             root = Path(tempdir)

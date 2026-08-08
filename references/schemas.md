@@ -1,6 +1,13 @@
 # JSON Schemas
 
-This document defines the JSON schemas used by skills-master.
+This document preserves historical receipt shapes and the two current static
+boundary inputs. `trigger-evals.json` and `boundary-evals.json` remain active
+declarative inputs. The eval, history, grading, metric, timing, benchmark,
+comparison, and analysis shapes below are compatibility references for older
+artifacts; `skills-master` no longer ships the host-specific optimizer that
+produced them. A new evaluation workflow must choose its schema and rubric at
+its behavior owner instead of treating these legacy examples as current
+defaults.
 
 ---
 
@@ -83,7 +90,7 @@ prompt, condition, and repeat indexes stable across isolated runs.
 
 ## trigger-evals.json
 
-Defines the trigger-eval query set for frontmatter description optimization.
+Defines the trigger-eval query set for model-invoked, host-specific selection.
 Recommended location: `evals/trigger-evals.json` within the skill directory.
 
 ```json
@@ -106,7 +113,9 @@ Recommended location: `evals/trigger-evals.json` within the skill directory.
 **Guidance:**
 - Include both positive and negative cases
 - Make negative cases near misses when possible, not only obviously unrelated prompts
-- Prefer coverage of adjacent skills, install-path ambiguity, upstream sync, doc cleanup, and trigger-boundary cases
+- Use only for hosts and invocation modes where the model may select the skill
+- Let `writing-for-agents` own description semantics and the evaluation rubric
+- Prefer coverage of adjacent owners, install-path ambiguity, and upstream sync
 
 ---
 
@@ -119,12 +128,12 @@ with adjacent skills. Recommended location:
 ```json
 [
   {
-    "query": "Research community best practices, then rewrite this skill",
-    "expected_primary_skill": "skills-master",
-    "allowed_secondary_skills": ["deep-research"],
-    "forbidden_skills": ["web-research"],
-    "expected_route": "research_then_refactor",
-    "rationale": "The main job is still skill lifecycle work."
+    "query": "Rewrite this SKILL.md, then install it for Codex",
+    "expected_primary_skill": "writing-for-agents",
+    "allowed_secondary_skills": ["skills-master"],
+    "forbidden_skills": [],
+    "expected_route": "write_then_deliver",
+    "rationale": "Writing owns the content contract; lifecycle delivery follows."
   }
 ]
 ```

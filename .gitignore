@@ -9,4 +9,7 @@ build/
 *-workspace/
 feedback.json
 
+# Deployment-specific fleet policy is selected explicitly and is not packaged.
+config/*.local.toml
+
 *.log

@@ -26,7 +26,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Scan a local Skills fleet without mutating it")
     parser.add_argument(
         "--policy",
-        default=str(SKILLS_MASTER_ROOT / "references" / "fleet-policy.v1.toml"),
+        required=True,
         help="Fleet policy TOML path",
     )
     parser.add_argument("--output-dir", required=True, help="Directory for generated receipts")

@@ -1,4 +1,4 @@
 interface:
   display_name: "Skills Master"
-  short_description: "Govern skill and agent lifecycle work"
-  default_prompt: "Use $skills-master to audit this skill or agent, identify the live source of truth, and choose the right lifecycle workflow before editing."
+  short_description: "Govern skill source and delivery lifecycle"
+  default_prompt: "Use $skills-master to bind this asset's canonical owner, reconcile upstream and live copies, and prove installation, projection, packaging, or host discovery."

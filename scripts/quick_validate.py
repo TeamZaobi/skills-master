@@ -16,7 +16,11 @@ from utils import parse_markdown_frontmatter
 
 ALLOWED_NAME_PATTERN = re.compile(r"^[a-z0-9-]+$")
 COMMON_ALLOWED_PROPERTIES = {"name", "description", "compatibility", "metadata"}
-SKILL_ALLOWED_PROPERTIES = COMMON_ALLOWED_PROPERTIES | {"license", "allowed-tools"}
+SKILL_ALLOWED_PROPERTIES = COMMON_ALLOWED_PROPERTIES | {
+    "license",
+    "allowed-tools",
+    "disable-model-invocation",
+}
 AGENT_ALLOWED_PROPERTIES = COMMON_ALLOWED_PROPERTIES | {"tools"}
 
 
@@ -86,6 +90,10 @@ def validate_skill(skill_path):
     ok, message = validate_common_frontmatter(frontmatter, SKILL_ALLOWED_PROPERTIES, "SKILL.md")
     if not ok:
         return False, message
+
+    invocation_flag = frontmatter.get("disable-model-invocation")
+    if invocation_flag is not None and str(invocation_flag).lower() not in {"true", "false"}:
+        return False, "'disable-model-invocation' must be true or false"
 
     return True, "Skill is valid!"
 

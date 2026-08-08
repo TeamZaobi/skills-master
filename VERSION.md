@@ -3,26 +3,28 @@
 ## Current
 
 - Name: `skills-master`
-- Version: `0.5.0`
-- Status: self-governed multi-host skill and companion-agent lifecycle
-- Date: `2026-07-17`
+- Version: `0.6.0`
+- Status: lifecycle governance rebaselined on `writing-for-agents`
+- Date: `2026-08-08`
 
 ## This Version Includes
 
-- Four explicit asset shapes with deterministic canonical paths
-- Repository-product layout at `skills/<name>`
-- Registry v2 for canonical sources, projections, and external dependencies
-- Direct one-hop host projection rules
-- Shared `.agents/skills` plus opt-in Kimi Code projection and shadow checks
-- Repository topology doctor and layout fixtures
-- A compact four-step `SKILL.md` with conditional detail disclosed to references
-- Explicit external method-skill and adjacent-skill ownership boundaries
+- Narrow ownership: lifecycle delivery here; agent-facing writing and invocation design in `writing-for-agents`
+- Minimal initializer with explicit `model` or `user` invocation mode
+- Minimal companion-agent initializer with explicit projection only
+- Host-specific invocation rendering for Claude-compatible frontmatter and Codex `agents/openai.yaml`
+- Dated, source-linked discovery paths instead of durable host assumptions
+- Fail-closed Kimi duplicate handling where public precedence is unspecified
+- Explicit per-step completion-criterion audit and external rubric selection
+- Deployment-local fleet policy with a tracked generic example
+- Removal of the unverified `.claude/commands` description optimizer and its
+  hard-coded writing rubric; behavior evaluation now remains with the
+  agent-writing owner and target host
 
 ## Compatibility
 
-- Existing `init_skill.py --path` and project-native defaults remain supported.
+- `init_skill.py --path` and project-native defaults remain supported.
 - `skills/src/<name>` remains valid only for a declared generated product.
-- `doctor.py` applies to registry-backed repositories; standalone assets use
-  `quick_validate` and direct link status.
-- Claude-specific trigger evaluation remains optional; core lifecycle tooling
-  does not depend on it.
+- `~/.codex/skills` is available only as the explicit `codex-compat` link target.
+- Historical evaluation receipt schemas remain readable, but this lifecycle
+  Skill no longer ships a host-specific description optimizer.

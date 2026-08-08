@@ -27,15 +27,6 @@ STOPWORDS = {
     "need", "across", "while", "over", "than", "after", "before", "create",
     "creating", "update", "updating", "optimize", "optimizing",
 }
-ROLE_KEYWORDS = {
-    "orchestrator": {
-        "orchestrate", "orchestration", "coordinate", "coordination", "delegate",
-        "delegation", "handoff", "subagent", "multi-skill", "multi skill",
-        "adjacent skill", "adjacent skills",
-    },
-}
-
-
 @dataclass
 class SkillInfo:
     name: str
@@ -44,7 +35,7 @@ class SkillInfo:
     body: str
     metadata: dict[str, str]
     role: str
-    has_not_to_use: bool
+    has_ownership_boundary: bool
     has_coordination: bool
 
 
@@ -86,12 +77,8 @@ def discover_skill_dirs(paths: Iterable[str]) -> list[Path]:
 
 def detect_role(description: str, body: str, metadata: dict[str, str]) -> str:
     explicit_role = metadata.get("role")
-    if explicit_role:
+    if explicit_role in {"domain", "orchestrator"}:
         return explicit_role
-    haystack = f"{description}\n{body}".lower()
-    for role, keywords in ROLE_KEYWORDS.items():
-        if any(keyword in haystack for keyword in keywords):
-            return role
     return "domain"
 
 
@@ -142,9 +129,14 @@ def load_skill(path: Path) -> SkillInfo:
     metadata = parse_metadata_block(metadata_raw.get("metadata", ""))
     role = detect_role(description, body, metadata)
     lower_body = body.lower()
-    has_not_to_use = any(
+    has_ownership_boundary = any(
         phrase in lower_body
-        for phrase in ("when not to use", "do not use", "not for", "should not trigger")
+        for phrase in (
+            "ownership boundary",
+            "activation boundary",
+            "handoff boundary",
+            "source-of-truth ownership",
+        )
     )
     has_coordination = any(
         phrase in lower_body
@@ -157,7 +149,7 @@ def load_skill(path: Path) -> SkillInfo:
         body=body,
         metadata=metadata,
         role=role,
-        has_not_to_use=has_not_to_use,
+        has_ownership_boundary=has_ownership_boundary,
         has_coordination=has_coordination,
     )
 
@@ -249,11 +241,11 @@ def check_skills(skills: list[SkillInfo], boundary_evals: list[dict[str, object]
             ))
 
     for skill in skills:
-        if skill.role == "orchestrator" and not skill.has_not_to_use:
+        if skill.role == "orchestrator" and not skill.has_ownership_boundary:
             issues.append(Issue(
                 "warning",
-                "orchestrator_missing_not_to_use",
-                f"Orchestration-style skill '{skill.name}' does not clearly say when not to use it.",
+                "orchestrator_missing_ownership_boundary",
+                f"Orchestration-style skill '{skill.name}' lacks an explicit ownership or activation boundary.",
                 [skill.name],
                 {"path": str(skill.path)},
             ))
@@ -359,7 +351,7 @@ def main() -> int:
                     "path": str(skill.path),
                     "role": skill.role,
                     "metadata": skill.metadata,
-                    "has_not_to_use": skill.has_not_to_use,
+                    "has_ownership_boundary": skill.has_ownership_boundary,
                     "has_coordination": skill.has_coordination,
                 }
                 for skill in skills

@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from scripts.doctor import RepositoryDoctor, expected_source, summarize
-from scripts.link_skill import link_skill_to_entries
+from scripts.link_skill import get_target_entries, link_skill_to_entries
 
 
 SKILL_BODY = """---
@@ -422,7 +422,7 @@ targets = ["agents", "claude", "kimi"]
         )
         findings, counts = self.run_doctor()
         self.assertEqual(counts["error"], 0, findings)
-        self.assertNotIn("projection_kimi_shadow", {item.code for item in findings})
+        self.assertNotIn("projection_kimi_conflict", {item.code for item in findings})
 
     def test_kimi_projection_is_opt_in(self):
         source = self.root / "skills" / "shared-only"
@@ -441,10 +441,10 @@ targets = ["agents", "claude"]
         )
         findings, counts = self.run_doctor()
         self.assertEqual(counts["error"], 0, findings)
-        self.assertNotIn("projection_kimi_shadow", {item.code for item in findings})
+        self.assertNotIn("projection_kimi_conflict", {item.code for item in findings})
         self.assertFalse((self.root / ".kimi-code" / "skills" / "shared-only").exists())
 
-    def test_kimi_shadow_detects_diverging_duplicate(self):
+    def test_kimi_conflict_detects_diverging_duplicate(self):
         source = self.root / "skills" / "shadowed"
         self.write_skill(source, "shadowed")
         self.direct_projection(self.root / ".agents" / "skills", "shadowed", source)
@@ -461,7 +461,20 @@ targets = ["agents", "claude"]
             )
         )
         findings, _ = self.run_doctor()
-        self.assertIn("projection_kimi_shadow", {item.code for item in findings})
+        self.assertIn("projection_kimi_conflict", {item.code for item in findings})
+
+    def test_documented_user_target_paths(self):
+        codex = get_target_entries("codex")
+        self.assertEqual([item["dir"] for item in codex], [Path.home() / ".agents" / "skills"])
+
+        codex_compat = get_target_entries("codex-compat")
+        self.assertEqual([item["dir"] for item in codex_compat], [Path.home() / ".codex" / "skills"])
+
+        antigravity = get_target_entries("antigravity")
+        self.assertEqual(
+            [item["dir"] for item in antigravity],
+            [Path.home() / ".gemini" / "config" / "skills"],
+        )
 
 
 if __name__ == "__main__":

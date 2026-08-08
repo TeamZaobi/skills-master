@@ -12,6 +12,7 @@ Example:
 """
 
 import fnmatch
+import os
 import sys
 import zipfile
 from pathlib import Path
@@ -23,10 +24,10 @@ from scripts.quick_validate import validate_skill
 
 # Patterns to exclude when packaging skills.
 EXCLUDE_DIRS = {"__pycache__", "node_modules"}
-EXCLUDE_GLOBS = {"*.pyc"}
+EXCLUDE_GLOBS = {"*.pyc", "*.local.toml"}
 EXCLUDE_FILES = {".DS_Store"}
 # Directories excluded only at the skill root (not when nested deeper).
-ROOT_EXCLUDE_DIRS = {"evals"}
+ROOT_EXCLUDE_DIRS = {".claude", ".codepilot", ".git", "config", "evals", "tests"}
 
 
 def should_exclude(rel_path: Path) -> bool:
@@ -94,16 +95,26 @@ def package_skill(skill_path, output_dir=None):
     # Create the .skill file (zip format)
     try:
         with zipfile.ZipFile(skill_filename, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            # Walk through the skill directory, excluding build artifacts
-            for file_path in skill_path.rglob('*'):
-                if not file_path.is_file():
-                    continue
-                arcname = file_path.relative_to(skill_path.parent)
-                if should_exclude(arcname):
-                    print(f"  Skipped: {arcname}")
-                    continue
-                zipf.write(file_path, arcname)
-                print(f"  Added: {arcname}")
+            # Prune excluded directory trees before visiting their contents.
+            for current_root, dirnames, filenames in os.walk(skill_path, followlinks=False):
+                current = Path(current_root)
+                kept_dirs = []
+                for dirname in sorted(dirnames):
+                    rel_dir = (current / dirname).relative_to(skill_path.parent)
+                    if should_exclude(rel_dir):
+                        print(f"  Skipped: {rel_dir}/")
+                    else:
+                        kept_dirs.append(dirname)
+                dirnames[:] = kept_dirs
+
+                for filename in sorted(filenames):
+                    file_path = current / filename
+                    arcname = file_path.relative_to(skill_path.parent)
+                    if should_exclude(arcname):
+                        print(f"  Skipped: {arcname}")
+                        continue
+                    zipf.write(file_path, arcname)
+                    print(f"  Added: {arcname}")
 
         print(f"\n✅ Successfully packaged skill to: {skill_filename}")
         return skill_filename
